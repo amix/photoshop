@@ -1,0 +1,182 @@
+;Photoshop version 1.0.1, file: ULine.a
+;  Computer History Museum, www.computerhistory.org
+;  This material is (C)Copyright 1990 Adobe Systems Inc.
+;  It may not be distributed to third parties.
+;  It is licensed for non-commercial use according to 
+;  www.computerhistory.org/softwarelicense/photoshop/ 
+
+			INCLUDE 	'Traps.a'
+
+; **********************************************************************
+
+			SEG 		'ALineTool'
+
+DoMarkLine	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoMarkLine (srcPtr: Ptr;
+;								  dstPtr: Ptr;
+;								  level: INTEGER;
+;								  count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	16
+@dstPtr 	EQU 	12
+@level		EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	12
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D5,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+
+;			Initialize loop
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+			MOVE.W		@level(A6),D1
+			CLR.W		D2
+			MOVE.W		#255,D3
+
+;			Process next byte
+
+@1			MOVE.B		(A0)+,D2
+			BNE.S		@2
+			ADDA.W		#1,A1
+			DBF 		D0,@1
+			BRA.S		@4
+
+;			Test for mask equal to 255
+
+@2			CMP.W		D3,D2
+			BNE.S		@3
+			MOVE.B		D1,(A1)+
+			DBF 		D0,@1
+			BRA.S		@4
+
+;			Else blend the two values
+
+@3			MOVE.W		D1,D4
+			MULU.W		D2,D4
+			CLR.W		D5
+			MOVE.B		(A1),D5
+			NOT.B		D2
+			MULU.W		D2,D5
+			ADD.W		D4,D5
+			ADD.W		#127,D5
+			MULU.W		#257,D5
+			SWAP		D5
+			MOVE.B		D5,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+@4			MOVEM.L 	(SP)+,D3-D5
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 	'ALineTool'
+
+DoMultiplyMasks 	PROC	EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoMultiplyMasks (srcPtr: Ptr;
+;									   dstPtr: Ptr;
+;									   count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	14
+@dstPtr 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	10
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D4,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+
+;			Initialize loop
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+			CLR.W		D1
+			CLR.W		D2
+			MOVE.W		#255,D3
+
+;			Case 1: source is zero
+
+@1			MOVE.B		(A0)+,D1
+			BNE.S		@2
+			CLR.B		(A1)+
+			DBF 		D0,@1
+			BRA.S		@6
+
+;			Case 2: source is 255
+
+@2			CMP.B		D3,D1
+			BNE.S		@3
+			ADDA.W		#1,A1
+			DBF 		D0,@1
+			BRA.S		@6
+
+;			Case 3: destination is zero
+
+@3			MOVE.B		(A1)+,D2
+			BNE.S		@4
+			DBF 		D0,@1
+			BRA.S		@6
+
+;			Case 4: destination is 255
+
+@4			CMP.B		D3,D2
+			BNE.S		@5
+			MOVE.B		D1,-1(A1)
+			DBF 		D0,@1
+			BRA.S		@6
+
+;			Case 5: general case
+
+@5			MOVE.W		D1,D4
+			MULU.W		D2,D4
+			ADD.W		#127,D4
+			MULU.W		#257,D4
+			SWAP		D4
+			MOVE.B		D4,-1(A1)
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+@6			MOVEM.L 	(SP)+,D3-D4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			END

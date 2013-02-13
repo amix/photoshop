@@ -1,0 +1,488 @@
+;Photoshop version 1.0.1, file: UCalculate.a
+;  Computer History Museum, www.computerhistory.org
+;  This material is (C)Copyright 1990 Adobe Systems Inc.
+;  It may not be distributed to third parties.
+;  It is licensed for non-commercial use according to 
+;  www.computerhistory.org/softwarelicense/photoshop/ 
+
+			INCLUDE 	'Traps.a'
+
+; **********************************************************************
+
+					SEG 		'ADoCalculate'
+
+DoCompositeBytes	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoCompositeBytes (forePtr: Ptr;
+;										backPtr: Ptr;
+;										maskPtr: Ptr;
+;										count: INTEGER);
+;
+;			Parameter Offsets
+
+@forePtr	EQU 	18
+@backPtr	EQU 	14
+@maskPtr	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	14
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2/D3,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@forePtr(A6),A0
+			MOVE.L		@backPtr(A6),A1
+			MOVE.L		@maskPtr(A6),A2
+
+;			Loop through bytes
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Composite bytes
+
+@1			CLR.W		D1
+			MOVE.B		(A2),D1
+			CLR.W		D2
+			MOVE.B		(A0)+,D2
+			MULU.W		D1,D2
+			CLR.W		D3
+			MOVE.B		(A1)+,D3
+			NOT.B		D1
+			MULU.W		D1,D3
+			ADD.W		D3,D2
+
+;			Divide by 255 a fast way
+
+			ADD.W		#127,D2
+			MULU.W		#257,D2
+			SWAP		D2
+			MOVE.B		D2,(A2)+
+
+;			Move to next pixel
+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2/D3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoCalculate'
+
+DoBlendBytes	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoBlendBytes (srcPtr: Ptr;
+;									dstPtr: Ptr;
+;									count: INTEGER;
+;									map1: TLookUpTable;
+;									map2: TLookUpTable);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	22
+@dstPtr 	EQU 	18
+@count		EQU 	16
+@map1		EQU 	12
+@map2		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.L		@map1(A6),A2
+			MOVE.L		@map2(A6),A3
+
+;			Loop through bytes
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+			CLR.W		D1
+			CLR.W		D2
+
+;			Blend bytes
+
+@1			MOVE.B		(A1),D1
+			MOVE.B		(A2,D1.W),D1
+			MOVE.B		(A0)+,D2
+			MOVE.B		(A3,D2.W),D2
+			ADD.B		D2,D1
+			MOVE.B		D1,(A1)+
+
+;			Move to next pixel
+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoCalculate'
+
+DoSubtractBytes 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoSubtractBytes (srcPtr: Ptr;
+;									   dstPtr: Ptr;
+;									   count: INTEGER;
+;									   scale: INTEGER;
+;									   offset: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	18
+@dstPtr 	EQU 	14
+@count		EQU 	12
+@scale		EQU 	10
+@offset 	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	14
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D6,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+
+;			Prepare registers
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+			MOVE.W		@scale(A6),D2
+
+			MOVE.W		@offset(A6),D3
+
+			CLR.W		D1
+			CLR.W		D4
+
+			MOVE.W		#255,D5
+
+			MOVE.W		#1000,D6
+
+;			Loop through bytes
+
+@1			MOVE.B		(A1),D1
+			MOVE.B		(A0)+,D4
+			SUB.W		D4,D1
+			CMP.W		D2,D6
+			BEQ.S		@2
+			MULS.W		D6,D1
+			DIVS.W		D2,D1
+@2			ADD.W		D3,D1
+			BPL.S		@3
+			CLR.W		D1
+@3			CMP.W		D5,D1
+			BLE.S		@4
+			MOVE.W		D5,D1
+@4			MOVE.B		D1,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D6
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			SEG 		'ADoCalculate'
+
+DoAddBytes	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoAddBytes (srcPtr: Ptr;
+;								  dstPtr: Ptr;
+;								  count: INTEGER;
+;								  scale: INTEGER;
+;								  offset: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	18
+@dstPtr 	EQU 	14
+@count		EQU 	12
+@scale		EQU 	10
+@offset 	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	14
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D6,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+
+;			Prepare registers
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+			MOVE.W		@scale(A6),D2
+
+			MOVE.W		@offset(A6),D3
+
+			CLR.W		D1
+			CLR.W		D4
+
+			MOVE.W		#255,D5
+
+			MOVE.W		#1000,D6
+
+;			Loop through bytes
+
+@1			MOVE.B		(A1),D1
+			MOVE.B		(A0)+,D4
+			ADD.W		D4,D1
+			CMP.W		D2,D6
+			BEQ.S		@2
+			MULS.W		D6,D1
+			DIVS.W		D2,D1
+@2			ADD.W		D3,D1
+			BPL.S		@3
+			CLR.W		D1
+@3			CMP.W		D5,D1
+			BLE.S		@4
+			MOVE.W		D5,D1
+@4			MOVE.B		D1,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D6
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoCalculate'
+
+DoMultiplyBytes 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoMultiplyBytes (srcPtr: Ptr;
+;									   dstPtr: Ptr;
+;									   count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	14
+@dstPtr 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	10
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+
+;			Loop through bytes
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Multiply bytes
+
+@1			CLR.W		D1
+			MOVE.B		(A1),D1
+			CLR.W		D2
+			MOVE.B		(A0)+,D2
+			MULU.W		D2,D1
+
+;			Divide by 255 a fast way
+
+			ADD.W		#127,D1
+			MULU.W		#257,D1
+			SWAP		D1
+
+;			Move to next pixel
+
+			MOVE.B		D1,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoCalculate'
+
+DoScreenBytes	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoScreenBytes (srcPtr: Ptr;
+;									 dstPtr: Ptr;
+;									 count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	14
+@dstPtr 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	10
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+
+;			Loop through bytes
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Screen bytes
+
+@1			CLR.W		D1
+			MOVE.B		(A1),D1
+			NOT.B		D1
+			CLR.W		D2
+			MOVE.B		(A0)+,D2
+			NOT.B		D2
+			MULU.W		D2,D1
+
+;			Divide by 255 a fast way
+
+			ADD.W		#127,D1
+			MULU.W		#257,D1
+			SWAP		D1
+
+;			Move to next pixel
+
+			NOT.B		D1
+			MOVE.B		D1,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoCalculate'
+
+DoDiffBytes 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoDiffBytes (srcPtr: Ptr;
+;								   dstPtr: Ptr;
+;								   count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	14
+@dstPtr 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	10
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+
+;			Loop through bytes
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Difference bytes
+
+@1			MOVE.B		(A1),D1
+			SUB.B		(A0)+,D1
+			BCC.S		@2
+			NOT.B		D1
+@2			MOVE.B		D1,(A1)+
+
+;			Move to next pixel
+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			END

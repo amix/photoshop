@@ -1,0 +1,1447 @@
+;Photoshop version 1.0.1, file: UConvert.a
+;  Computer History Museum, www.computerhistory.org
+;  This material is (C)Copyright 1990 Adobe Systems Inc.
+;  It may not be distributed to third parties.
+;  It is licensed for non-commercial use according to 
+;  www.computerhistory.org/softwarelicense/photoshop/ 
+
+			INCLUDE 	'Traps.a'
+
+; **********************************************************************
+
+				SEG 		'ARes'
+
+DeHalftoneRow	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DeHalftoneRow (srcPtr: Ptr;
+;									 dstPtr: Ptr;
+;									 rowBytes: INTEGER;
+;									 cols: INTEGER;
+;									 scale: INTEGER;
+;									 thresTable: TThresTable);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	22
+@dstPtr 	EQU 	18
+@rowBytes	EQU 	16
+@cols		EQU 	14
+@scale		EQU 	12
+@thresTable EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D7/A2-A3,-(SP)
+
+;			D0 = scale - 1
+
+			MOVE.W		@scale(A6),D0
+			SUB.W		#1,D0
+
+;			D1 = bytes per input row
+
+			MOVE.W		@rowBytes(A6),D1
+
+;			A0 is output pointer
+
+			MOVE.L		@dstPtr(A6),A0
+
+;			A1 is threshold table pointer
+
+			MOVE.L		@thresTable(A6),A1
+
+;			Compute an output row
+
+			MOVE.L		@srcPtr(A6),A2
+			MOVE.W		#7,D2
+
+;			Scan through columns
+
+			MOVE.W		@cols(A6),D3
+			SUB.W		#1,D3
+
+;			Map the bits into bytes
+
+@2			CLR.W		D7
+			MOVE.W		D0,D4
+
+@3			MOVE.W		D0,D5
+			MOVE.L		A2,A3
+
+@4			BTST		D2,(A3)
+			BEQ.S		@5
+			ADD.W		#1,D7
+@5			ADD.W		D1,A3
+			DBF 		D5,@4
+
+			SUB.W		#1,D2
+			BCC.S		@6
+			ADD.W		#1,A2
+			ADD.W		#8,D2
+@6			DBF 		D4,@3
+
+			MOVE.B		(A1,D7.W),(A0)+
+			DBF 		D3,@2
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D7/A2-A3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoConvert'
+
+DoCountColors	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			FUNCTION DoCountColors (rDataPtr: Ptr;
+;									gDataPtr: Ptr;
+;									bDataPtr: Ptr;
+;									size: INTEGER;
+;									colorTable: Ptr): BOOLEAN;
+
+;			Parameter Offsets
+
+@result 		EQU 	26
+@rDataPtr		EQU 	22
+@gDataPtr		EQU 	18
+@bDataPtr		EQU 	14
+@size			EQU 	12
+@colorTable 	EQU 	8
+
+;			Size of parameters
+
+@params 		EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A4,-(SP)
+
+;			A0 is pointer to color table
+
+			MOVE.L		@colorTable(A6),A0
+
+;			A1-A3 are pointers to input channels
+
+			MOVE.L		@rDataPtr(A6),A1
+			MOVE.L		@gDataPtr(A6),A2
+			MOVE.L		@bDataPtr(A6),A3
+
+;			Loop through pixels
+
+			MOVE.W		@size(A6),D0
+			SUB.W		#1,D0
+
+;			Get next pixel value
+
+@2			CLR.L		D1
+			MOVE.B		(A3)+,D1
+			SWAP		D1
+			MOVE.B		(A2)+,D1
+			LSL.W		#8,D1
+			MOVE.B		(A1)+,D1
+
+;			Test for black or white
+
+			TST.L		D1
+			BEQ.S		@13
+			CMP.L		#$FFFFFF,D1
+			BEQ.S		@13
+
+;			Do a binary search for color
+
+			MOVE.L		A0,A4
+			CMP.L		$200(A4),D1
+			BGT.S		@3
+			ADD.W		#$200,A4
+@3			CMP.L		$100(A4),D1
+			BGT.S		@4
+			ADD.W		#$100,A4
+@4			CMP.L		$80(A4),D1
+			BGT.S		@5
+			ADD.W		#$80,A4
+@5			CMP.L		$40(A4),D1
+			BGT.S		@6
+			ADD.W		#$40,A4
+@6			CMP.L		$20(A4),D1
+			BGT.S		@7
+			ADD.W		#$20,A4
+@7			CMP.L		$10(A4),D1
+			BGT.S		@8
+			ADD.W		#$10,A4
+@8			CMP.L		$8(A4),D1
+			BGT.S		@9
+			ADD.W		#$8,A4
+@9			CMP.L		$4(A4),D1
+			BGT.S		@10
+			ADD.W		#$4,A4
+@10 		CMP.L		(A4),D1
+			BEQ.S		@13
+			BGT.S		@11
+			ADD.W		#$4,A4
+
+;			Color value was not found, see if table is full
+
+@11 		TST.L		1016(A0)
+			BEQ.S		@12
+			MOVE.B		#1,@result(A6)
+			BRA.S		@15
+
+;			Insert value into color table
+
+@12 		MOVE.L		(A4),D2
+			MOVE.L		D1,(A4)+
+			MOVE.L		D2,D1
+			BNE.S		@12
+
+;			Move to next pixel
+
+@13 		DBF 		D0,@2
+
+;			Success
+
+			CLR.B		@result(A6)
+
+;			Clean up and exit
+
+@15 		MOVEM.L 	(SP)+,A2-A4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoConvert'
+
+DoMapColors 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoMapColors (rDataPtr: Ptr;
+;								   gDataPtr: Ptr;
+;								   bDataPtr: Ptr;
+;								   size: INTEGER;
+;								   colorTable: Ptr;
+;								   outDataPtr: Ptr);
+
+;			Parameter Offsets
+
+@rDataPtr		EQU 	26
+@gDataPtr		EQU 	22
+@bDataPtr		EQU 	18
+@size			EQU 	16
+@colorTable 	EQU 	12
+@outDataPtr 	EQU 	8
+
+;			Size of parameters
+
+@params 		EQU 	22
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A5,-(SP)
+
+;			Find index of black
+
+			MOVE.L		@colorTable(A6),A0
+			MOVE.L		A0,A1
+@1			TST.L		(A1)+
+			BNE.S		@1
+			MOVE.L		A1,D2
+			SUB.L		A0,D2
+			LSR.W		#2,D2
+			SUB.W		#1,D2
+
+;			A1-A3 are pointers to input channels
+
+			MOVE.L		@rDataPtr(A6),A1
+			MOVE.L		@gDataPtr(A6),A2
+			MOVE.L		@bDataPtr(A6),A3
+
+;			A5 is pointer to output data
+
+			MOVE.L		@outDataPtr(A6),A5
+
+;			Loop through pixels
+
+			MOVE.W		@size(A6),D0
+			SUB.W		#1,D0
+
+;			Get next pixel value
+
+@2			CLR.L		D1
+			MOVE.B		(A3)+,D1
+			SWAP		D1
+			MOVE.B		(A2)+,D1
+			LSL.W		#8,D1
+			MOVE.B		(A1)+,D1
+
+;			Test for black
+
+			TST.L		D1
+			BNE.S		@2A
+			MOVE.B		D2,(A5)+
+			BRA.S		@next
+
+;			Test for white
+
+@2A 		CMP.L		#$FFFFFF,D1
+			BNE.S		@2B
+			CLR.B		(A5)+
+			BRA.S		@next
+
+;			Do a binary search for color
+
+@2B 		MOVE.L		A0,A4
+			CMP.L		$200(A4),D1
+			BGT.S		@3
+			ADD.W		#$200,A4
+@3			CMP.L		$100(A4),D1
+			BGT.S		@4
+			ADD.W		#$100,A4
+@4			CMP.L		$80(A4),D1
+			BGT.S		@5
+			ADD.W		#$80,A4
+@5			CMP.L		$40(A4),D1
+			BGT.S		@6
+			ADD.W		#$40,A4
+@6			CMP.L		$20(A4),D1
+			BGT.S		@7
+			ADD.W		#$20,A4
+@7			CMP.L		$10(A4),D1
+			BGT.S		@8
+			ADD.W		#$10,A4
+@8			CMP.L		$8(A4),D1
+			BGT.S		@9
+			ADD.W		#$8,A4
+@9			CMP.L		$4(A4),D1
+			BGT.S		@map
+			ADD.W		#$4,A4
+
+;			Compute pixel index
+
+@map		MOVE.L		A4,D1
+			SUB.L		A0,D1
+			LSR.W		#2,D1
+			MOVE.B		D1,(A5)+
+
+;			Move to next pixel
+
+@next		DBF 		D0,@2
+
+;			Clean up and exit
+
+@15 		MOVEM.L 	(SP)+,A2-A5
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoConvert'
+
+DoBuildInverse	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoBuildInverse (table: Ptr;
+;									  buffer: Ptr;
+;									  step: INTEGER);
+
+;			Parameter Offsets
+
+@table		EQU 	14
+@buffer 	EQU 	10
+@step		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	10
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D2-D3,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@table(A6),A0
+			MOVE.L		@buffer(A6),A1
+			MOVE.W		@step(A6),D0
+
+;			Initialize loop
+
+			MOVE.W		#31,D1
+			MOVE.W		#255,D3
+
+;			Increment current distance unless equal to 255
+
+@1			ADD.B		#1,D3
+			BNE.S		@2
+			SUB.B		#1,D3
+
+;			Compare distance to existing distance
+
+@2			CMP.B		(A1),D3
+			BHS.S		@3
+
+;			Current distance is less than existing distance
+
+			MOVE.B		D2,(A0)
+			MOVE.B		D3,(A1)
+			BRA.S		@4
+
+;			Current distance is more than or same as existing distance
+
+@3			MOVE.B		(A0),D2
+			MOVE.B		(A1),D3
+
+;			Move to next pixel
+
+@4			ADDA.W		D0,A0
+			ADDA.W		D0,A1
+			DBF 		D1,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D2-D3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoConvert'
+
+NoDitherRow 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE NoDitherRow (rDataPtr: Ptr;
+;								   gDataPtr: Ptr;
+;								   bDataPtr: Ptr;
+;								   outDataPtr: Ptr;
+;								   table: Ptr;
+;								   count: INTEGER); EXTERNAL;
+;
+;			Parameter Offsets
+
+@rDataPtr	EQU 	26
+@gDataPtr	EQU 	22
+@bDataPtr	EQU 	18
+@outDataPtr EQU 	14
+@table		EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	22
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A4,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@rDataPtr(A6),A0
+			MOVE.L		@gDataPtr(A6),A1
+			MOVE.L		@bDataPtr(A6),A2
+			MOVE.L		@outDataPtr(A6),A3
+			MOVE.L		@table(A6),A4
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Compute output index
+
+@1			CLR.W		D1
+			MOVE.B		(A0)+,D1
+			LSR.B		#3,D1
+			CLR.W		D2
+			MOVE.B		(A1)+,D2
+			LSR.B		#3,D2
+			LSL.W		#5,D2
+			ADD.W		D2,D1
+			CLR.W		D2
+			MOVE.B		(A2)+,D2
+			LSR.B		#3,D2
+			ROR.W		#6,D2
+			ADD.W		D2,D1
+			MOVE.B		(A4,D1.W),(A3)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+;			Diffuses the error in and computes the output index
+
+			MACRO
+			DiffuseIn	&in,&out
+
+;			Add in 3/4 of error
+
+			MOVE.W		(A2)+,D5
+			ADD.W		D5,&in
+			ASR.W		#2,D5
+			SUB.W		D5,&in
+
+;			Clamp to 0..255
+
+			BPL.S		@1
+			CLR.W		&in
+@1			CMP.W		#255,&in
+			BLE.S		@2
+			MOVE.W		#255,&in
+
+;			Strip off lower 3 bits
+
+@2			MOVE.W		&in,&out
+			LSR.B		#3,&out
+
+			ENDM
+
+; **********************************************************************
+
+;			Diffuses the error out to nearby pixels
+
+			MACRO
+			DiffuseOut	&reg,&off
+
+;			Find 1/4 of error
+
+			MOVE.W		&reg,D7
+			ASR.W		#2,D7
+
+;			Diffuse it down and back
+
+			ADD.W		D7,-6(A3)
+
+;			Divide remaining error in half
+
+			SUB.W		D7,&reg
+			ASR.W		#1,&reg
+
+;			Diffuse it down and to right
+
+			ADD.W		&reg,(A3)+
+			ADD.W		&reg,&off(A2)
+
+			ENDM
+
+; **********************************************************************
+
+			SEG 		'ADoConvert'
+
+DiffuseRGB	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DiffuseRGB (rDataPtr: Ptr;
+;								  gDataPtr: Ptr;
+;								  bDataPtr: Ptr;
+;								  outDataPtr: Ptr;
+;								  thisError: Ptr;
+;								  nextError: Ptr;
+;								  table: Ptr;
+;								  LUT: TRGBLookUpTable;
+;								  count: INTEGER);
+;
+;			Parameter Offsets
+
+@rDataPtr	EQU 	38
+@gDataPtr	EQU 	34
+@bDataPtr	EQU 	30
+@outDataPtr EQU 	26
+@thisError	EQU 	22
+@nextError	EQU 	18
+@table		EQU 	14
+@LUT		EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	34
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D7/A2-A5,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@outDataPtr(A6),A1
+			MOVE.L		@thisError(A6),A2
+			MOVE.L		@nextError(A6),A3
+			MOVE.L		@table(A6),A4
+			MOVE.L		@LUT(A6),A5
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Compute output index
+
+@1			MOVE.L		@rDataPtr(A6),A0
+			ADD.L		#1,@rDataPtr(A6)
+
+			CLR.W		D1
+			MOVE.B		(A0),D1
+
+			DiffuseIn	D1,D7
+
+			MOVE.L		@gDataPtr(A6),A0
+			ADD.L		#1,@gDataPtr(A6)
+
+			CLR.W		D2
+			MOVE.B		(A0),D2
+
+			DiffuseIn	D2,D6
+
+			LSL.W		#5,D6
+			ADD.W		D6,D7
+
+			MOVE.L		@bDataPtr(A6),A0
+			ADD.L		#1,@bDataPtr(A6)
+
+			CLR.W		D3
+			MOVE.B		(A0),D3
+
+			DiffuseIn	D3,D6
+
+			ROR.W		#6,D6
+			ADD.W		D6,D7
+
+;			Look up in inverse table
+
+			CLR.W		D6
+			MOVE.B		(A4,D7.W),D6
+
+;			Save output value
+
+			MOVE.B		D6,(A1)+
+
+;			Subtract the output value from goal
+
+			CLR.W		D7
+			MOVE.B		(A5,D6.W),D7
+			SUB.W		D7,D1
+
+			ADD.W		#256,D6
+			MOVE.B		(A5,D6.W),D7
+			SUB.W		D7,D2
+
+			ADD.W		#256,D6
+			MOVE.B		(A5,D6.W),D7
+			SUB.W		D7,D3
+
+;			Diffuse error values
+
+			DiffuseOut	D1,0
+			DiffuseOut	D2,2
+			DiffuseOut	D3,4
+
+;			Move to next pixel
+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+@4			MOVEM.L 	(SP)+,D3-D7/A2-A5
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoConvert'
+
+Do5BitHistogram 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE Do5BitHistogram (rDataPtr: Ptr;
+;									   gDataPtr: Ptr;
+;									   bDataPtr: Ptr;
+;									   hist: Ptr;
+;									   weight: INTEGER;
+;									   count: INTEGER);
+;
+;			Parameter Offsets
+
+@rDataPtr	EQU 	24
+@gDataPtr	EQU 	20
+@bDataPtr	EQU 	16
+@hist		EQU 	12
+@weight 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	20
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D4/A2-A3,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@rDataPtr(A6),A0
+			MOVE.L		@gDataPtr(A6),A1
+			MOVE.L		@bDataPtr(A6),A2
+			MOVE.L		@hist(A6),A3
+			MOVE.W		@weight(A6),D4
+			EXT.L		D4
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Compute histogram
+
+			MOVE.B		#$F8,D3
+
+@1			CLR.L		D1
+			MOVE.B		(A0)+,D1
+			AND.B		D3,D1
+			LSR.W		#1,D1
+
+			CLR.L		D2
+			MOVE.B		(A1)+,D2
+			AND.B		D3,D2
+			LSL.W		#4,D2
+			ADD.W		D2,D1
+
+			CLR.L		D2
+			MOVE.B		(A2)+,D2
+			AND.B		D3,D2
+			SWAP		D2
+			LSR.L		#7,D2
+			ADD.L		D2,D1
+
+			ADD.L		D4,(A3,D1.L)
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D4/A2-A3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoConvert'
+
+DoProjectHist	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoProjectHist (minR: INTEGER;
+;									 maxR: INTEGER;
+;									 minG: INTEGER;
+;									 maxG: INTEGER;
+;									 minB: INTEGER;
+;									 maxB: INTEGER;
+;									 projectR: Ptr;
+;									 projectG: Ptr;
+;									 projectB: Ptr;
+;									 hist: Ptr);
+;
+;			Parameter Offsets
+
+@minR		EQU 	34
+@maxR		EQU 	32
+@minG		EQU 	30
+@maxG		EQU 	28
+@minB		EQU 	26
+@maxB		EQU 	24
+@projectR	EQU 	20
+@projectG	EQU 	16
+@projectB	EQU 	12
+@hist		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	28
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D6/A2-A5,-(SP)
+
+;			Adjust minR to zero
+
+			MOVE.W		@minR(A6),D0
+			SUB.W		D0,@maxR(A6)
+			EXT.L		D0
+			LSL.W		#2,D0
+			ADD.L		D0,@projectR(A6)
+			ADD.L		D0,@hist(A6)
+
+;			Adjust minG to zero
+
+			MOVE.W		@minG(A6),D0
+			SUB.W		D0,@maxG(A6)
+			EXT.L		D0
+			LSL.W		#2,D0
+			ADD.L		D0,@projectG(A6)
+			LSL.W		#5,D0
+			ADD.L		D0,@hist(A6)
+
+;			Adjust minB to zero
+
+			MOVE.W		@minB(A6),D0
+			SUB.W		D0,@maxB(A6)
+			EXT.L		D0
+			LSL.W		#2,D0
+			ADD.L		D0,@projectB(A6)
+			SWAP		D0
+			LSR.L		#6,D0
+			ADD.L		D0,@hist(A6)
+
+;			Unload addresses
+
+			MOVE.L		@hist(A6),A0
+			MOVE.L		@projectR(A6),A1
+			MOVE.L		@projectG(A6),A2
+			MOVE.L		@projectB(A6),A3
+
+;			Triple nested loop
+
+			CLR.L		D0
+			CLR.L		D1
+			CLR.L		D2
+
+			MOVE.W		@maxB(A6),D2
+@1			MOVE.L		D2,D5
+			LSL.W		#2,D5
+			MOVE.L		A0,A4
+			MOVE.L		D5,D6
+			SWAP		D6
+			LSR.L		#6,D6
+			ADD.L		D6,A4
+
+			MOVE.W		@maxG(A6),D1
+@2			MOVE.L		D1,D4
+			LSL.W		#2,D4
+			MOVE.L		A4,A5
+			MOVE.L		D4,D6
+			LSL.W		#5,D6
+			ADD.L		D6,A5
+
+			MOVE.W		@maxR(A6),D0
+@3			MOVE.L		D0,D3
+			LSL.W		#2,D3
+
+			MOVE.L		(A5,D3.W),D6
+			ADD.L		D6,(A1,D3.W)
+			ADD.L		D6,(A2,D4.W)
+			ADD.L		D6,(A3,D5.W)
+
+			DBF 		D0,@3
+			DBF 		D1,@2
+			DBF 		D2,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D6/A2-A5
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			SEG 		'ADoConvert'
+
+DitherRGB	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DitherRGB (rDataPtr: Ptr;
+;								 gDataPtr: Ptr;
+;								 bDataPtr: Ptr;
+;								 row: INTEGER;
+;								 numCols: INTEGER;
+;								 outDataPtr: Ptr;
+;								 ditherSize: INTEGER;
+;								 noiseTable: TNoiseTable;
+;								 thresTable: TThresTable;
+;								 colorTable: Ptr;
+;								 VAR colors: INTEGER);
+;
+;			Parameter Offsets
+
+@rDataPtr		EQU 	42
+@gDataPtr		EQU 	38
+@bDataPtr		EQU 	34
+@row			EQU 	32
+@numCols		EQU 	30
+@outDataPtr 	EQU 	26
+@ditherSize 	EQU 	24
+@noiseTable 	EQU 	20
+@thresTable 	EQU 	16
+@colorTable 	EQU 	12
+@colors 		EQU 	8
+
+;			Size of parameters
+
+@params 		EQU 	38
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D7/A2-A5,-(SP)
+
+;			A0-A2 are pointers to input data
+
+			MOVE.L		@rDataPtr(A6),A0
+			MOVE.L		@gDataPtr(A6),A1
+			MOVE.L		@bDataPtr(A6),A2
+
+;			D3 will hold output pointer
+
+			MOVE.L		@outDataPtr(A6),D3
+
+;			A3 is pointer to row in noise table
+
+			MOVE.L		@noiseTable(A6),A3
+			MOVE.W		@row(A6),D0
+			EXT.L		D0
+			DIVU.W		@ditherSize(A6),D0
+			SWAP		D0
+			LSL.W		#4,D0
+			ADD.W		D0,A3
+
+;			A4 is pointer to threshold table
+
+			MOVE.L		@thresTable(A6),A4
+
+;			A5 is pointer to color table
+
+			MOVE.L		@colorTable(A6),A5
+
+;			D0 is dither table size
+
+			MOVE.W		@ditherSize(A6),D0
+
+;			D1 is noise table index
+
+			CLR.W		D1
+
+;			Loop through columns
+
+			MOVE.W		@numCols(A6),D2
+			SUB.W		#1,D2
+
+;			Save A6, use for output pointer
+
+			MOVE.L		A6,-(SP)
+			MOVE.L		D3,A6
+
+;			Compute noise value
+
+@4			CLR.W		D4
+			MOVE.B		(A3,D1.W),D4
+			ADD.W		#1,D1
+			CMP.W		D0,D1
+			BNE.S		@5
+			CLR.W		D1
+
+;			Compute index value
+
+@5			CLR.W		D5
+			MOVE.B		(A0)+,D5
+			ADD.W		D4,D5
+			CLR.W		D7
+			MOVE.B		(A4,D5.W),D7
+			CLR.W		D5
+			MOVE.B		(A1)+,D5
+			ADD.W		D4,D5
+			CLR.W		D6
+			MOVE.B		(A4,D5.W),D6
+			LSL.W		#5,D6
+			ADD.W		D6,D7
+			CLR.W		D5
+			MOVE.B		(A2)+,D5
+			ADD.W		D4,D5
+			CLR.W		D6
+			MOVE.B		(A4,D5.W),D6
+			ROR.W		#6,D6
+			ADD.W		D6,D7
+
+;			See of outputing data
+
+			TST.L		D3
+			BEQ.S		@6
+
+;			Yes, save pixel value
+
+			MOVE.B		(A5,D7.W),(A6)+
+			BRA.S		@8
+
+;			No, mark as used
+
+@6			TST.B		(A5,D7.W)
+			BNE.S		@8
+
+			MOVE.B		#1,(A5,D7.W)
+
+			MOVE.L		(SP)+,A6
+
+			MOVE.L		A0,-(SP)
+			MOVE.L		@colors(A6),A0
+			SUB.W		#1,(A0)
+			MOVE.L		(SP)+,A0
+
+			MOVE.L		A6,-(SP)
+			MOVE.L		D3,A6
+
+;			Move to next column
+
+@8			DBF 		D2,@4
+
+;			Restore A6
+
+			MOVE.L		(SP)+,A6
+
+;			Clean up and exit
+
+@exit		MOVEM.L 	(SP)+,D3-D7/A2-A5
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 	'ARes'
+
+DoRGB2HSLorB	PROC	EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoRGB2HSLorB (rPtr: Ptr;
+;									gPtr: Ptr;
+;									bPtr: Ptr;
+;									hPtr: Ptr;
+;									sPtr: Ptr;
+;									lPtr: Ptr;
+;									count: INTEGER;
+;									bright: BOOLEAN);
+;
+;			Parameter Offsets
+
+@rPtr		EQU 	32
+@gPtr		EQU 	28
+@bPtr		EQU 	24
+@hPtr		EQU 	20
+@sPtr		EQU 	16
+@lPtr		EQU 	12
+@count		EQU 	10
+@bright 	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	28
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D7/A2-A5,-(SP)
+
+;			Unload parameters
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+			MOVE.L		@rPtr(A6),A0
+			MOVE.L		@gPtr(A6),A1
+			MOVE.L		@bPtr(A6),A2
+			MOVE.L		@hPtr(A6),A3
+			MOVE.L		@sPtr(A6),A4
+			MOVE.L		@lPtr(A6),A5
+
+;			Do conversion
+
+@1			CLR.W		D1
+			CLR.W		D2
+			CLR.W		D3
+			MOVE.B		(A0)+,D1
+			MOVE.B		(A1)+,D2
+			MOVE.B		(A2)+,D3
+
+;			Find maximum value
+
+			MOVE.W		D1,D4
+			CMP.B		D2,D4
+			BHI.S		@2
+			MOVE.B		D2,D4
+@2			CMP.B		D3,D4
+			BHI.S		@3
+			MOVE.B		D3,D4
+
+;			Find minimum value
+
+@3			MOVE.W		D1,D5
+			CMP.B		D2,D5
+			BLO.S		@4
+			MOVE.B		D2,D5
+@4			CMP.B		D3,D5
+			BLO.S		@5
+			MOVE.B		D3,D5
+
+;			Test which color system converting to
+
+@5			TST.B		@bright(A6)
+			BEQ.S		@light
+
+;			Brightness is just maximum value
+
+			MOVE.B		D4,(A5)+
+
+;			Compute saturation for HSV model
+
+			SUB.W		D4,D5
+			NEG.W		D5
+			BNE.S		@5A
+			CLR.B		(A4)+
+			CLR.B		(A3)+
+			BRA 		@next
+@5A 		MULU.W		#255,D5
+			DIVU.W		D4,D5
+			MOVE.B		D5,(A4)+
+			BRA.S		@hue
+
+;			Compute lightness
+
+@light		MOVE.W		D4,D6
+			ADD.W		D5,D6
+			LSR.W		#1,D6
+			MOVE.B		D6,(A5)+
+
+;			Compute saturation
+
+			MOVE.W		D4,D6
+			ADD.B		D5,D6
+			BCC.S		@6
+			MOVE.B		D4,D6
+			NOT.B		D6
+			MOVE.B		D5,D7
+			NOT.B		D7
+			ADD.B		D7,D6
+@6			MOVE.W		D4,D7
+			SUB.W		D5,D7
+			BNE.S		@7
+			CLR.B		(A3)+
+			CLR.B		(A4)+
+			BRA.S		@next
+@7			MULU.W		#255,D7
+			DIVU.W		D6,D7
+			MOVE.B		D7,(A4)+
+
+;			Compute X and Y coordinates for hue
+
+@hue		MOVE.W		D1,D4
+			LSL.W		#1,D4
+			SUB.W		D2,D4
+			SUB.W		D3,D4
+			SWAP		D4
+			CLR.W		D4
+
+			MOVE.W		D2,D5
+			SUB.W		D3,D5
+			MULS.W		#28378,D5
+			LSL.L		#2,D5
+
+;			Compute absolute values in D1 & D2
+
+			MOVE.L		D4,D1
+			BGE.S		@8
+			NEG.L		D1
+@8			MOVE.L		D5,D2
+			BGE.S		@9
+			NEG.L		D2
+
+;			Make D1 the larger, keep a flag in D6 if swapped
+
+@9			CLR.W		D6
+			CMP.L		D2,D1
+			BGE.S		@10
+			ADD.W		#1,D6
+			EXG 		D1,D2
+
+;			Normalize so larger is in range 512..1023
+
+@10 		LSL.L		#1,D1
+			LSL.L		#1,D2
+			BTST		#25,D1
+			BEQ.S		@10
+			SWAP		D1
+			SWAP		D2
+
+;			Multiply smaller by 64
+
+			EXT.L		D2
+			LSL.L		#6,D2
+
+;			Compute table index
+
+			DIVU.W		D1,D2
+
+;			Look up in table
+
+			MOVE.L		A6,-(SP)
+			LEA 		@table,A6
+			MOVE.B		(A6,D2.W),D1
+			MOVE.L		(SP)+,A6
+
+;			Was Y > X?
+
+			TST.W		D6
+			BEQ.S		@11
+			SUB.B		#64,D1
+			NEG.B		D1
+
+;			Was X < 0?
+
+@11 		TST.L		D4
+			BGE.S		@12
+			SUB.B		#128,D1
+			NEG.B		D1
+
+;			Was Y < 0?
+
+@12 		TST.L		D5
+			BGE.S		@13
+			NEG.B		D1
+
+;			Save hue
+
+@13 		MOVE.B		D1,(A3)+
+
+;			Move to next pixel
+
+@next		DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D7/A2-A5
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+;			Arctangent LUT
+
+@table		DC.B		 0, 1, 1, 2, 3, 3, 4, 4
+			DC.B		 5, 6, 6, 7, 8, 8, 9, 9
+			DC.B		10,11,11,12,12,13,13,14
+			DC.B		15,15,16,16,17,17,18,18
+			DC.B		19,19,20,20,21,21,22,22
+			DC.B		23,23,24,24,25,25,25,26
+			DC.B		26,27,27,27,28,28,29,29
+			DC.B		29,30,30,30,31,31,31,32
+			DC.B		32
+
+; **********************************************************************
+
+				SEG 	'ARes'
+
+DoHSLorB2RGB	PROC	EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoHSLorB2RGB (hPtr: Ptr;
+;									sPtr: Ptr;
+;									lPtr: Ptr;
+;									rPtr: Ptr;
+;									gPtr: Ptr;
+;									bPtr: Ptr;
+;									count: LONGINT;
+;									bright: BOOLEAN);
+;
+;			Parameter Offsets
+
+@hPtr		EQU 	34
+@sPtr		EQU 	30
+@lPtr		EQU 	26
+@rPtr		EQU 	22
+@gPtr		EQU 	18
+@bPtr		EQU 	14
+@count		EQU 	10
+@bright 	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	30
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D6/A2-A5,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@count(A6),D0
+
+			MOVE.L		@hPtr(A6),A0
+			MOVE.L		@sPtr(A6),A1
+			MOVE.L		@lPtr(A6),A2
+			MOVE.L		@rPtr(A6),A3
+			MOVE.L		@gPtr(A6),A4
+			MOVE.L		@bPtr(A6),A5
+
+;			Test which color system
+
+@1			TST.B		@bright(A6)
+			BEQ.S		@light
+
+;			Decode brightness and saturation into min and gap
+
+			CLR.W		D1
+			MOVE.B		(A2)+,D1
+			CLR.W		D2
+			MOVE.B		(A1)+,D2
+			MULU.W		D1,D2
+			DIVU.W		#255,D2
+			SUB.W		D2,D1
+			BRA.S		@hue
+
+;			Decode lightness and saturation into min and gap
+
+@light		CLR.W		D1
+			MOVE.B		(A2)+,D1
+			CLR.W		D3
+			MOVE.B		(A1)+,D3
+			MOVE.W		D1,D2
+			CMP.B		#127,D1
+			BLS.S		@2
+			NOT.B		D2
+@2			LSL.W		#1,D2
+			MULU.W		D3,D2
+			DIVU.W		#254,D2
+			CMP.B		#255,D2
+			BNE.S		@3
+			MOVE.B		#127,D1
+@3			MOVE.W		D2,D3
+			LSR.W		#1,D3
+			SUB.B		D3,D1
+
+;			Look up projections in table
+
+@hue		MOVE.L		A6,-(SP)
+			LEA 		@table,A6
+			CLR.W		D3
+			MOVE.B		(A0)+,D3
+			LSL.W		#1,D3
+			MOVE.W		(A6,D3.W),D4
+			LSR.W		#1,D3
+			SUB.B		#85,D3
+			LSL.W		#1,D3
+			MOVE.W		(A6,D3.W),D5
+			LSR.W		#1,D3
+			SUB.B		#86,D3
+			LSL.W		#1,D3
+			MOVE.W		(A6,D3.W),D6
+			MOVE.L		(SP)+,A6
+
+;			Scale projections by gap
+
+			MULU.W		D2,D4
+			LSL.L		#2,D4
+			SWAP		D4
+			MULU.W		D2,D5
+			LSL.L		#2,D5
+			SWAP		D5
+			MULU.W		D2,D6
+			LSL.L		#2,D6
+			SWAP		D6
+
+;			Add in minimum values
+
+			ADD.B		D1,D4
+			ADD.B		D1,D5
+			ADD.B		D1,D6
+
+;			Save results
+
+			MOVE.B		D4,(A3)+
+			MOVE.B		D5,(A4)+
+			MOVE.B		D6,(A5)+
+
+;			Move to next pixel
+
+			SUB.L		#1,D0
+			BNE 		@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D6/A2-A5
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+;			Projection LUT
+
+@table		DC.W		16384,16384,16384,16384,16384,16384,16384,16384
+			DC.W		16384,16384,16384,16384,16384,16384,16384,16384
+			DC.W		16384,16384,16384,16384,16384,16384,16384,16384
+			DC.W		16384,16384,16384,16384,16384,16384,16384,16384
+			DC.W		16384,16384,16384,16384,16384,16384,16384,16384
+			DC.W		16384,16384,16384,16384,15699,15257,14826,14405
+			DC.W		13993,13589,13192,12802,12419,12041,11668,11299
+			DC.W		10935,10574,10216, 9860, 9507, 9155, 8804, 8454
+			DC.W		 8105, 7755, 7405, 7053, 6701, 6346, 5989, 5630
+			DC.W		 5267, 4901, 4530, 4155, 3774, 3388, 2995, 2594
+			DC.W		 2186, 1770, 1344,	907,  460,	  0,	0,	  0
+			DC.W			0,	  0,	0,	  0,	0,	  0,	0,	  0
+			DC.W			0,	  0,	0,	  0,	0,	  0,	0,	  0
+			DC.W			0,	  0,	0,	  0,	0,	  0,	0,	  0
+			DC.W			0,	  0,	0,	  0,	0,	  0,	0,	  0
+			DC.W			0,	  0,	0,	  0,	0,	  0,	0,	  0
+			DC.W			0,	  0,	0,	  0,	0,	  0,	0,	  0
+			DC.W			0,	  0,	0,	  0,	0,	  0,	0,	  0
+			DC.W			0,	  0,	0,	  0,	0,	  0,	0,	  0
+			DC.W			0,	  0,	0,	  0,	0,	  0,	0,	  0
+			DC.W			0,	  0,	0,	  0,	0,	  0,	0,	  0
+			DC.W			0,	  0,	0,	  0,  460,	907, 1344, 1770
+			DC.W		 2186, 2594, 2995, 3388, 3774, 4155, 4530, 4901
+			DC.W		 5267, 5630, 5989, 6346, 6701, 7053, 7405, 7755
+			DC.W		 8105, 8454, 8804, 9155, 9507, 9860,10216,10574
+			DC.W		10935,11299,11668,12041,12419,12802,13192,13589
+			DC.W		13993,14405,14826,15257,15699,16384,16384,16384
+			DC.W		16384,16384,16384,16384,16384,16384,16384,16384
+			DC.W		16384,16384,16384,16384,16384,16384,16384,16384
+			DC.W		16384,16384,16384,16384,16384,16384,16384,16384
+			DC.W		16384,16384,16384,16384,16384,16384,16384,16384
+			DC.W		16384,16384,16384,16384,16384,16384,16384,16384
+
+; **********************************************************************
+
+			END

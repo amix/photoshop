@@ -1,0 +1,121 @@
+;Photoshop version 1.0.1, file: UGIFFormat.a
+;  Computer History Museum, www.computerhistory.org
+;  This material is (C)Copyright 1990 Adobe Systems Inc.
+;  It may not be distributed to third parties.
+;  It is licensed for non-commercial use according to 
+;  www.computerhistory.org/softwarelicense/photoshop/ 
+
+			INCLUDE 	'Traps.a'
+
+; **********************************************************************
+
+			SEG 		'AGIFFormat'
+
+ExtractGIF	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			FUNCTION ExtractGIF (buffer: Ptr;
+;								 offset: LONGINT;
+;								 count: INTEGER): INTEGER;
+;
+;			Parameter Offsets
+
+@result 	EQU 	18
+@buffer 	EQU 	14
+@offset 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	10
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Extract the bits
+
+			MOVE.L		@buffer(A6),A0
+			MOVE.L		@offset(A6),D0
+			LSR.L		#3,D0
+			MOVE.B		2(A0,D0.L),D1
+			SWAP		D1
+			MOVE.B		1(A0,D0.L),D1
+			LSL.W		#8,D1
+			MOVE.B		(A0,D0.L),D1
+			MOVE.W		@offset+2(A6),D0
+			AND.W		#$7,D0
+			LSR.L		D0,D1
+
+;			Mask the bits
+
+			MOVE.W		@count(A6),D0
+			MOVE.L		#-1,D2
+			LSL.W		D0,D2
+			NOT.W		D2
+			AND.W		D2,D1
+
+;			Return the extracted bits
+
+			MOVE.W		D1,@result(A6)
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			SEG 		'AGIFFormat'
+
+StuffGIF	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE StuffGIF (buffer: Ptr;
+;								offset: LONGINT;
+;								code: INTEGER);
+;
+;			Parameter Offsets
+
+@buffer 	EQU 	14
+@offset 	EQU 	10
+@code		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	10
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Stuff the bits
+
+			MOVE.L		@buffer(A6),A0
+			CLR.L		D0
+			MOVE.W		@code(A6),D0
+			MOVE.W		@offset+2(A6),D1
+			AND.W		#7,D1
+			LSL.L		D1,D0
+			MOVE.L		@offset(A6),D1
+			LSR.L		#3,D1
+			OR.B		D0,(A0,D1.L)
+			LSR.W		#8,D0
+			OR.B		D0,1(A0,D1.L)
+			SWAP		D0
+			OR.B		D0,2(A0,D1.L)
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			END

@@ -1,0 +1,682 @@
+;Photoshop version 1.0.1, file: URotate.a
+;  Computer History Museum, www.computerhistory.org
+;  This material is (C)Copyright 1990 Adobe Systems Inc.
+;  It may not be distributed to third parties.
+;  It is licensed for non-commercial use according to 
+;  www.computerhistory.org/softwarelicense/photoshop/ 
+
+			INCLUDE 	'Traps.a'
+
+; **********************************************************************
+
+				SEG 		'ADoRotate'
+
+DoReverseBytes	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoReverseBytes (data: Ptr;
+;									  count: INTEGER);
+;
+;			Parameter Offsets
+
+@data		EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	6
+
+;			Unload parameters
+
+			LINK		A6,#0
+			MOVE.L		@data(A6),A0
+			MOVE.W		@count(A6),D0
+
+;			Compute address of one pixel past last
+
+			MOVE.L		A0,A1
+			ADDA.W		D0,A1
+
+;			Reverse the bytes
+
+			ASR.W		#1,D0
+			SUB.W		#1,D0
+			BMI.S		@2
+
+@1			MOVE.B		(A0),D1
+			MOVE.B		-(A1),(A0)+
+			MOVE.B		D1,(A1)
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+@2			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			SEG 		'ARes'
+
+BiCubic 	PROC		EXPORT
+
+;			On entry:
+;				A4 = points to the first of the four bytes
+;				D7 = is fraction (0..255) into third byte (word)
+;
+;			On exit:
+;				D7 = interpolated value (word)
+;
+;			All other registers are saved
+
+;			Convert fraction value to 0..31
+
+			LSR.W		#3,D7
+
+;			If equal to zero, just take first pixel
+
+			BNE.S		@1
+			MOVE.B		1(A4),D7
+			RTS
+
+;			Save registers
+
+@1			MOVEM.L 	D0-D3/D5-D6,-(SP)
+
+;			Compute 1 - fraction
+
+			MOVE.W		#32,D6
+			SUB.W		D7,D6
+
+;			Unload pixel values
+
+			CLR.W		D0
+			CLR.W		D1
+			CLR.W		D2
+			CLR.W		D3
+			MOVE.B		(A4)+,D0
+			MOVE.B		(A4)+,D1
+			MOVE.B		(A4)+,D2
+			MOVE.B		(A4),D3
+
+;			Compute weighted slopes
+
+			SUB.W		D2,D0
+			MULS.W		D7,D0
+			ASR.W		#1,D0
+
+			SUB.W		D1,D3
+			MULS.W		D6,D3
+			ASR.W		#1,D3
+
+;			Scale either side
+
+			MOVE.W		#64,D5
+			SUB.W		D6,D5
+			ADD.W		D7,D5
+			MULU.W		D5,D1
+
+			MOVE.W		#64,D5
+			SUB.W		D7,D5
+			ADD.W		D6,D5
+			MULU.W		D5,D2
+
+;			Subtract weighted slopes
+
+			SUB.W		D0,D1
+			SUB.W		D3,D2
+
+;			Square fractions
+
+			MULU.W		D6,D6
+			MULU.W		D7,D7
+
+;			Compute final sum
+
+			MULS.W		D1,D6
+			MULS.W		D2,D7
+			ADD.L		D6,D7
+
+;			Scale by 15 bits
+
+			ASL.L		#1,D7
+			ADD.L		#$8000,D7
+			SWAP		D7
+
+;			If less than zero, return zero
+
+			TST.W		D7
+			BPL.S		@2
+			CLR.W		D7
+
+;			If greater than 255, return 255
+
+@2			CMP.W		#255,D7
+			BLE.S		@3
+			MOVE.W		#255,D7
+
+;			Return the computed value
+
+@3			MOVEM.L 	(SP)+,D0-D3/D5-D6
+			RTS
+
+; **********************************************************************
+
+			SEG 		'ARes'
+
+DoBiCubic	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			FUNCTION DoBiCubic (base: Ptr;
+;								part: INTEGER): INTEGER;
+;
+;			Parameter Offsets
+
+@result 	EQU 	14
+@base		EQU 	10
+@part		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	6
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A4/D7,-(SP)
+
+;			Call BiCubic
+
+			MOVE.L		@base(A6),A4
+			MOVE.W		@part(A6),D7
+			BSR 		BiCubic
+			MOVE.W		D7,@result(A6)
+
+;			Clean up and exit
+
+@3			MOVEM.L 	(SP)+,A4/D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			SEG 		'ADoRotate'
+
+DoSkewRow	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoSkewRow (srcPtr: Ptr;
+;								 dstPtr: Ptr;
+;								 srcCount: INTEGER;
+;								 dstCount: INTEGER;
+;								 base: LONGINT;
+;								 step: LONGINT;
+;								 method: INTEGER;
+;								 background: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 		EQU 	28
+@dstPtr 		EQU 	24
+@srcCount		EQU 	22
+@dstCount		EQU 	20
+@base			EQU 	16
+@step			EQU 	12
+@method 		EQU 	10
+@background 	EQU 	8
+
+;			Size of parameters
+
+@params 		EQU 	24
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D7/A4,-(SP)
+
+;			A0 points to start of line
+
+			MOVE.L		@srcPtr(A6),A0
+
+;			A1 is the current output pointer
+
+			MOVE.L		@dstPtr(A6),A1
+
+;			D0 & D1 hold the current fractional column
+
+			MOVE.L		@base(A6),D0
+			MOVE.L		D0,D1
+			ASR.L		#8,D0
+			ASL.W		#8,D1
+			SWAP		D1
+			CLR.W		D1
+
+;			Add 1/2 pixel if sampling
+
+			TST.W		@method(A6)
+			BNE.S		@1
+			CLR.L		D2
+			ADD.L		#$80000000,D1
+			ADDX.L		D2,D0
+
+;			D2 & D3 hold the step to the next column
+
+@1			MOVE.L		@step(A6),D2
+			MOVE.L		D2,D3
+			ASR.L		#8,D2
+			SWAP		D2
+			EXT.L		D2
+			ASL.L		#8,D3
+
+;			D4 index of last pixel
+
+			MOVE.W		@srcCount(A6),D4
+			SUB.W		#1,D4
+			EXT.L		D4
+
+;			See if we can to bi-cubic interpolation
+
+@2			CMP.W		#2,@method(A6)
+			BNE.S		@2A
+			TST.L		D0
+			BLE.S		@2A
+			CMP.L		D4,D0
+			BGE.S		@2A
+			MOVE.W		D0,D7
+			ADD.W		#1,D7
+			CMP.W		D4,D7
+			BEQ.S		@2A
+
+;			Yes we can, do it
+
+			LEA 		-1(A0,D0.W),A4
+			MOVE.L		D1,D7
+			CLR.W		D7
+			SWAP		D7
+			LSR.W		#8,D7
+			JSR 		BiCubic
+			MOVE.B		D7,D5
+			BRA.S		@9
+
+;			D5 = first pixel value
+
+@2A 		CLR.W		D5
+			TST.L		D0
+			BPL.S		@3
+			MOVE.W		@background(A6),D5
+			BPL.S		@5
+			MOVE.B		(A0),D5
+			BRA.S		@5
+@3			CMP.L		D4,D0
+			BLE.S		@4
+			MOVE.W		@background(A6),D5
+			BPL.S		@5
+			MOVE.B		(A0,D4.W),D5
+			BRA.S		@5
+@4			MOVE.B		(A0,D0.W),D5
+
+;			If sampling, just use first value
+
+@5			TST.W		@method(A6)
+			BEQ.S		@9
+
+;			D6 = second pixel value
+
+			CLR.W		D6
+			ADD.L		#1,D0
+			BPL.S		@6
+			MOVE.W		@background(A6),D6
+			BPL.S		@8
+			MOVE.B		(A0),D6
+			BRA.S		@8
+@6			CMP.L		D4,D0
+			BLE.S		@7
+			MOVE.W		@background(A6),D6
+			BPL.S		@8
+			MOVE.B		(A0,D4.W),D6
+			BRA.S		@8
+@7			MOVE.B		(A0,D0.W),D6
+
+;			Restore input pointer
+
+@8			SUB.L		#1,D0
+
+;			If values are equal, no need to average
+
+			CMP.B		D5,D6
+			BEQ.S		@9
+
+;			Compute weight in D7
+
+			MOVE.L		D1,D7
+			SWAP		D7
+			LSR.W		#8,D7
+			BEQ.S		@9
+
+;			Compute weighted average
+
+			MULU.W		D7,D6
+			SUB.W		#256,D7
+			NEG.W		D7
+			MULU.W		D7,D5
+			ADD.W		D6,D5
+			ADD.W		#$80,D5
+			LSR.W		#8,D5
+
+;			Save D5 as output value and move to next pixel
+
+@9			MOVE.B		D5,(A1)+
+			ADD.L		D3,D1
+			ADDX.L		D2,D0
+			SUB.W		#1,@dstCount(A6)
+			BNE 		@2
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D7/A4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoRotate'
+
+DoScaleFactor	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoScaleFactor (srcPtr: Ptr;
+;									 dstPtr: Ptr;
+;									 count: INTEGER;
+;									 factor: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 		EQU 	16
+@dstPtr 		EQU 	12
+@count			EQU 	10
+@factor 		EQU 	8
+
+;			Size of parameters
+
+@params 		EQU 	12
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D6,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.W		@count(A6),D0
+			EXT.L		D0
+			MOVE.W		@factor(A6),D1
+			EXT.L		D1
+
+;			D2 = factor DIV 2
+
+			MOVE.L		D1,D2
+			LSR.L		#1,D2
+
+;			D3 = factor - 1
+
+			MOVE.W		D1,D3
+			SUB.W		#1,D3
+
+;			D4 holds pixel values
+
+			CLR.L		D4
+
+;			Compute number of main iterations
+
+			DIVU.W		D1,D0
+			SUB.W		#1,D0
+			BMI.S		@3
+
+;			Compute averaged values
+
+@1			MOVE.L		D2,D5
+			MOVE.W		D3,D6
+@2			MOVE.B		(A0)+,D4
+			ADD.L		D4,D5
+			DBF 		D6,@2
+			DIVU.W		D1,D5
+			MOVE.B		D5,(A1)+
+			DBF 		D0,@1
+
+;			Compute last pixel
+
+@3			SWAP		D0
+			MOVE.W		D0,D1
+			BEQ.S		@5
+			SUB.W		#1,D0
+			MOVE.W		D1,D2
+			EXT.L		D2
+			LSR.L		#1,D2
+@4			MOVE.B		(A0)+,D4
+			ADD.L		D4,D2
+			DBF 		D0,@4
+			DIVU.W		D1,D2
+			MOVE.B		D2,(A1)+
+
+;			Clean up and exit
+
+@5			MOVEM.L 	(SP)+,D3-D6
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ACropping'
+
+DoEllipseRow	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoEllipseRow (dstPtr: Ptr;
+;									row: INTEGER;
+;									width: INTEGER;
+;									height: INTEGER);
+;
+;			Parameter Offsets
+
+@dstPtr 	EQU 	14
+@row		EQU 	12
+@width		EQU 	10
+@height 	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	10
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D7,-(SP)
+
+;			Test if height is odd
+
+			MOVE.W		@height(A6),D2
+			MOVE.W		D2,D3
+			ASR.W		#1,D3
+			BCC.S		@3
+
+;			Yes, height is odd
+
+			MOVE.W		@row(A6),D0
+			SUB.W		D3,D0
+			BPL.S		@1
+			NEG.W		D0
+@1			ASL.W		#1,D0
+			MOVE.W		D0,D1
+			SUB.W		#1,D0
+			BPL.S		@2
+			CLR.W		D0
+@2			ADD.W		#1,D1
+			SWAP		D0
+			SWAP		D1
+			CLR.W		D0
+			CLR.W		D1
+			ASR.L		#1,D0
+			ASR.L		#1,D1
+			DIVU.W		D2,D0
+			DIVU.W		D2,D1
+			BRA.S		@6
+
+;			No, height is even
+
+@3			CMP.W		@row(A6),D3
+			BGT.S		@4
+			MOVE.W		@row(A6),D0
+			SUB.W		D3,D0
+			BRA.S		@5
+@4			MOVE.W		D3,D0
+			SUB.W		@row(A6),D0
+			SUB.W		#1,D0
+
+;			Scale by half
+
+@5			MOVE.W		D0,D1
+			ADD.W		#1,D1
+			SWAP		D0
+			SWAP		D1
+			CLR.W		D0
+			CLR.W		D1
+			ASR.L		#1,D0
+			ASR.L		#1,D1
+			DIVU.W		D3,D0
+			DIVU.W		D3,D1
+
+;			Square the minimum and maximum values
+
+@6			MULU.W		D0,D0
+			MULU.W		D1,D1
+
+;			Initialize loop
+
+			MOVE.L		@dstPtr(A6),A0
+			MOVE.W		@width(A6),D2
+			MOVE.W		D2,D3
+			MOVE.W		D3,D4
+			SUB.W		#1,D2
+			ASR.W		#1,D4
+
+;			Branch if width is even
+
+@7			BTST		#0,D3
+			BEQ.S		@10
+
+;			Process odd width case
+
+			MOVE.W		D2,D5
+			SUB.W		D4,D5
+			BPL.S		@8
+			NEG.W		D5
+@8			ASL.W		#1,D5
+			MOVE.W		D5,D6
+			SUB.W		#1,D5
+			BPL.S		@9
+			CLR.W		D5
+@9			ADD.W		#1,D6
+			SWAP		D5
+			SWAP		D6
+			CLR.W		D5
+			CLR.W		D6
+			ASR.L		#1,D5
+			ASR.L		#1,D6
+			DIVU.W		D3,D5
+			DIVU.W		D3,D6
+			BRA.S		@13
+
+;			Process even width case
+
+@10 		CMP.W		D2,D4
+			BGT.S		@11
+			MOVE.W		D2,D5
+			SUB.W		D4,D5
+			BRA.S		@12
+@11 		MOVE.W		D4,D5
+			SUB.W		D2,D5
+			SUB.W		#1,D5
+
+;			Scale by half
+
+@12 		MOVE.W		D5,D6
+			ADD.W		#1,D6
+			SWAP		D5
+			SWAP		D6
+			CLR.W		D5
+			CLR.W		D6
+			ASR.L		#1,D5
+			ASR.L		#1,D6
+			DIVU.W		D4,D5
+			DIVU.W		D4,D6
+
+;			Square the minimum and maximum values
+
+@13 		MULU.W		D5,D5
+			MULU.W		D6,D6
+
+;			Sum the squares
+
+			ADD.L		D0,D5
+			ADD.L		D1,D6
+
+;			Set D7 to one
+
+			MOVE.L		#$40000000,D7
+
+;			If maximum <= 1 then set result to 255
+
+			CMP.L		D7,D6
+			SLS 		(A0)
+			BLS.S		@16
+
+;			If minimum >= 1 then set result to 0
+
+			CMP.L		D7,D5
+			BHS.S		@16
+
+;			Else interpolate
+
+			SUB.L		D5,D6
+			SUB.L		D5,D7
+			BRA.S		@15
+@14 		LSR.L		#1,D6
+			LSR.L		#1,D7
+@15 		CMP.L		#$10000,D6
+			BHS.S		@14
+			MULU.W		#255,D7
+			ADD.L		D6,D7
+			SUB.L		#1,D7
+			DIVU.W		D6,D7
+			MOVE.B		D7,(A0)
+
+;			Move to next pixel
+
+@16 		ADDA.W		#1,A0
+			DBF 		D2,@7
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			END

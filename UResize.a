@@ -1,0 +1,690 @@
+;Photoshop version 1.0.1, file: UResize.a
+;  Computer History Museum, www.computerhistory.org
+;  This material is (C)Copyright 1990 Adobe Systems Inc.
+;  It may not be distributed to third parties.
+;  It is licensed for non-commercial use according to 
+;  www.computerhistory.org/softwarelicense/photoshop/ 
+
+			INCLUDE 	'Traps.a'
+
+			IMPORT		BiCubic:CODE
+
+; **********************************************************************
+
+				SEG 		'ARes'
+
+DoSampleLine	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoSampleLine (srcPtr: Ptr;
+;									dstPtr: Ptr;
+;									count: INTEGER;
+;									offsets: UNIV Ptr);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	18
+@dstPtr 	EQU 	14
+@count		EQU 	12
+@offsets	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	14
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVE.L		A2,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.L		@offsets(A6),A2
+
+;			Sample line
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+@1			MOVE.W		(A2)+,D1
+			MOVE.B		(A0,D1.W),(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVE.L		(SP)+,A2
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ARes'
+
+DoInterpolateLine	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoInterpolateLine (srcPtr: Ptr;
+;										 dstPtr: Ptr;
+;										 count: INTEGER;
+;										 offsets: UNIV Ptr;
+;										 weights: UNIV Ptr);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	22
+@dstPtr 	EQU 	18
+@count		EQU 	16
+@offsets	EQU 	12
+@weights	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3/D3-D5,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.L		@offsets(A6),A2
+			MOVE.L		@weights(A6),A3
+
+;			Interpolate line
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+			CLR.W		D2
+			CLR.W		D3
+
+			MOVE.W		#128,D5
+
+@1			MOVE.W		(A2)+,D1
+			MOVE.B		(A0,D1.W),D2
+			MOVE.B		(A3)+,D3
+			BEQ.S		@2
+
+			CLR.W		D4
+			MOVE.B		1(A0,D1.W),D4
+			MULU.W		D3,D4
+			NOT.B		D3
+			ADD.W		#1,D3
+			MULU.W		D3,D2
+			ADD.W		D4,D2
+			ADD.W		D5,D2
+			LSR.W		#8,D2
+
+@2			MOVE.B		D2,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3/D3-D5
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ARes'
+
+DoBiCubicLine	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoBiCubicLine (srcPtr: Ptr;
+;									 dstPtr: Ptr;
+;									 srcCount: INTEGER;
+;									 dstCount: INTEGER;
+;									 offsets: UNIV Ptr;
+;									 weights: UNIV Ptr);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	24
+@dstPtr 	EQU 	20
+@srcCount	EQU 	18
+@dstCount	EQU 	16
+@offsets	EQU 	12
+@weights	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	20
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A4/D3-D7,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.L		@offsets(A6),A2
+			MOVE.L		@weights(A6),A3
+
+;			Interpolate line
+
+			MOVE.W		@dstCount(A6),D0
+			SUB.W		#1,D0
+
+			MOVE.W		@srcCount(A6),D1
+			SUB.W		#2,D1
+
+;			See if in bi-cubic range
+
+@1			CLR.W		D7
+			MOVE.B		(A3)+,D7
+			MOVE.W		(A2)+,D2
+			BLE.S		@2
+			CMP.W		D1,D2
+			BGE.S		@2
+
+;			Yes it is, do it
+
+			LEA 		-1(A0,D2.W),A4
+			JSR 		BiCubic
+			MOVE.B		D7,(A1)+
+			DBF 		D0,@1
+			BRA.S		@exit
+
+;			No, do bi-linear
+
+@2			CLR.W		D3
+			MOVE.B		(A0,D2.W),D3
+
+			TST.W		D7
+			BEQ.S		@3
+
+			CLR.W		D4
+			MOVE.B		1(A0,D2.W),D4
+
+			MULU.W		D7,D4
+			NOT.B		D7
+			ADD.W		#1,D7
+			MULU.W		D7,D3
+			ADD.W		D4,D3
+			ADD.W		#128,D3
+			LSR.W		#8,D3
+
+@3			MOVE.B		D3,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+@exit		MOVEM.L 	(SP)+,A2-A4/D3-D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ARes'
+
+DoInterpolateRow	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoInterpolateRow (srcPtr: Ptr;
+;										dstPtr: Ptr;
+;										count: INTEGER;
+;										weight: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	16
+@dstPtr 	EQU 	12
+@count		EQU 	10
+@weight 	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	12
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D5,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+
+;			Interpolate row
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+			MOVE.W		@weight(A6),D1
+
+			MOVE.W		D1,D2
+			NEG.B		D2
+
+			CLR.W		D3
+
+			MOVE.W		#128,D5
+
+@1			MOVE.B		(A0)+,D3
+			MULU.W		D1,D3
+			CLR.W		D4
+			MOVE.B		(A1),D4
+			MULU.W		D2,D4
+			ADD.W		D4,D3
+			ADD.W		D5,D3
+			LSR.W		#8,D3
+			MOVE.B		D3,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D5
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ARes'
+
+DoBiCubicRow	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoBiCubicRow (bufPtr: Ptr;
+;									count: INTEGER;
+;									weight: INTEGER);
+;
+;			Parameter Offsets
+
+@bufPtr 	EQU 	12
+@count		EQU 	10
+@weight 	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	8
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A4/D7,-(SP)
+
+;			Save result in place
+
+			MOVE.L		@bufPtr(A6),A0
+			MOVE.L		A0,A1
+
+;			Process row
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+			MOVE.W		@weight(A6),D1
+
+@1			MOVE.L		A0,A4
+			MOVE.W		D1,D7
+			JSR 		BiCubic
+			MOVE.B		D7,(A1)+
+			ADD.W		#4,A0
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A4/D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ARes'
+
+DoBigAverageLine	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoBigAverageLine (srcPtr: Ptr;
+;										dstPtr: Ptr;
+;										count: INTEGER;
+;										counts: UNIV Ptr);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	18
+@dstPtr 	EQU 	14
+@count		EQU 	12
+@counts 	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	14
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2/D3-D4,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.L		@counts(A6),A2
+
+;			Average line
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+			CLR.L		D4
+
+@1			MOVE.W		(A2)+,D1
+
+			CLR.L		D2
+			MOVE.W		D1,D2
+			LSR.W		#1,D2
+
+			MOVE.W		D1,D3
+			SUB.W		#1,D3
+
+@2			MOVE.B		(A0)+,D4
+			ADD.L		D4,D2
+			DBF 		D3,@2
+
+			DIVU.W		D1,D2
+			MOVE.B		D2,(A1)+
+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2/D3-D4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ARes'
+
+DoAddWeightedRow	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoAddWeightedRow (srcPtr: Ptr;
+;										dstPtr: Ptr;
+;										count: INTEGER;
+;										weight: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	16
+@dstPtr 	EQU 	12
+@count		EQU 	10
+@weight 	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	12
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+
+;			Process row
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+			MOVE.W		@weight(A6),D1
+
+			CMP.W		#1,D1
+			BEQ.S		@2
+
+			CMP.W		#256,D1
+			BEQ.S		@4
+
+;			General case
+
+@1			CLR.W		D2
+			MOVE.B		(A0)+,D2
+			MULU.W		D1,D2
+			ADD.L		D2,(A1)+
+			DBF 		D0,@1
+			BRA.S		@exit
+
+;			Weight 1 case
+
+@2			CLR.L		D2
+@3			MOVE.B		(A0)+,D2
+			ADD.L		D2,(A1)+
+			DBF 		D0,@3
+			BRA.S		@exit
+
+;			Weight 256 case
+
+@4			CLR.L		D2
+			MOVE.B		(A0)+,D2
+			LSL.W		#8,D2
+			ADD.L		D2,(A1)+
+			DBF 		D0,@4
+
+;			Clean up and exit
+
+@exit		UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ARes'
+
+DoDivideRow 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoDivideRow (bufPtr: Ptr;
+;								   count: INTEGER;
+;								   total: INTEGER);
+;
+;			Parameter Offsets
+
+@bufPtr 	EQU 	12
+@count		EQU 	10
+@total		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	8
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVE.L		D3,-(SP)
+
+;			Save result in place
+
+			MOVE.L		@bufPtr(A6),A0
+			MOVE.L		A0,A1
+
+;			Process row
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+			MOVE.W		@total(A6),D1
+
+			CLR.L		D2
+			MOVE.W		D1,D2
+			LSR.W		#1,D2
+
+@1			MOVE.L		(A0)+,D3
+			ADD.L		D2,D3
+			DIVU.W		D1,D3
+			MOVE.B		D3,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVE.L		(SP)+,D3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ARes'
+
+DoAverageLine	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoAverageLine (srcPtr: Ptr;
+;									 dstPtr: Ptr;
+;									 count: INTEGER;
+;									 offsets: UNIV Ptr;
+;									 weights: UNIV Ptr;
+;									 total: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	24
+@dstPtr 	EQU 	20
+@count		EQU 	18
+@offsets	EQU 	14
+@weights	EQU 	10
+@total		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	20
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A4/D3-D7,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.L		@offsets(A6),A2
+			MOVE.L		@weights(A6),A3
+
+;			D7 contains the total weight
+
+			MOVE.W		@total(A6),D7
+
+;			D6 contains half the weight
+
+			CLR.L		D6
+			MOVE.W		D7,D6
+			LSR.W		#1,D6
+
+;			D5 contains the constant 256
+
+			MOVE.W		#256,D5
+
+;			Process line
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Compute address of first pixel
+
+@1			MOVE.L		A0,A4
+			ADDA.W		(A2)+,A4
+
+;			Get initial weight
+
+			CLR.W		D1
+			MOVE.B		(A3)+,D1
+			SUB.W		D5,D1
+			NEG.W		D1
+
+;			Initialize total
+
+			MOVE.L		D6,D2
+
+;			Initialize remaining weight
+
+			MOVE.W		D7,D3
+
+;			Add in weighted first pixel
+
+			CLR.L		D4
+			MOVE.B		(A4)+,D4
+			MULU.W		D1,D4
+			ADD.L		D4,D2
+
+;			Subtract out initial weight
+
+			SUB.W		D1,D3
+
+;			Add in pixels until weight is < 256
+
+@2			CMP.W		D5,D3
+			BLT.S		@3
+
+			CLR.L		D4
+			MOVE.B		(A4)+,D4
+			LSL.W		#8,D4
+			ADD.L		D4,D2
+
+			SUB.W		D5,D3
+			BNE.S		@2
+			BRA.S		@4
+
+;			Add weighted final pixel
+
+@3			CLR.L		D4
+			MOVE.B		(A4)+,D4
+			MULU.W		D3,D4
+			ADD.L		D4,D2
+
+;			Divide by total
+
+@4			DIVU.W		D7,D2
+
+;			Save result
+
+			MOVE.B		D2,(A1)+
+
+;			Move to next output pixel
+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A4/D3-D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			END

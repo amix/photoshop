@@ -1,0 +1,156 @@
+;Photoshop version 1.0.1, file: UIFFFormat.a
+;  Computer History Museum, www.computerhistory.org
+;  This material is (C)Copyright 1990 Adobe Systems Inc.
+;  It may not be distributed to third parties.
+;  It is licensed for non-commercial use according to 
+;  www.computerhistory.org/softwarelicense/photoshop/ 
+
+			INCLUDE 	'Traps.a'
+
+; **********************************************************************
+
+				SEG 		'AIFFFormat'
+
+ExtractPlane	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE ExtractPlane (iData: Ptr;
+;									pData: Ptr;
+;									cols: INTEGER;
+;									plane: INTEGER);
+;
+;			Parameter Offsets
+
+@iData		EQU 	16
+@pData		EQU 	12
+@cols		EQU 	10
+@plane		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	12
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Extract the plane
+
+			MOVE.L		@iData(A6),A0
+			MOVE.L		@pData(A6),A1
+
+;			D0 is input bit number
+
+			MOVE.W		@plane(A6),D0
+
+;			D1 is output bit number
+
+			MOVE.W		#7,D1
+
+;			D2 is column counter
+
+			MOVE.W		@cols(A6),D2
+			SUB.W		#1,D2
+
+;			Get the bits
+
+@1			BTST		D0,(A0)+
+			BEQ.S		@2
+			BSET		D1,(A1)
+
+;			Update output pointer
+
+@2			SUB.W		#1,D1
+			BGE.S		@3
+			ADD.W		#8,D1
+			ADD.W		#1,A1
+
+;			Close loop
+
+@3			DBF 		D2,@1
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			SEG 		'AIFFFormat'
+
+StuffPlane	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE StuffPlane (pData: Ptr;
+;								  iData: Ptr;
+;								  cols: INTEGER;
+;								  plane: INTEGER);
+;
+;			Parameter Offsets
+
+@pData		EQU 	16
+@iData		EQU 	12
+@cols		EQU 	10
+@plane		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	12
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Extract the plane
+
+			MOVE.L		@pData(A6),A0
+			MOVE.L		@iData(A6),A1
+
+;			D0 is input bit number
+
+			MOVE.W		#7,D0
+
+;			D1 is output bit number
+
+			MOVE.W		@plane(A6),D1
+
+;			D2 is column counter
+
+			MOVE.W		@cols(A6),D2
+			SUB.W		#1,D2
+
+;			Get the bits
+
+@1			BTST		D0,(A0)
+			BEQ.S		@2
+			BSET		D1,(A1)
+
+;			Update input pointer
+
+@2			SUB.W		#1,D0
+			BGE.S		@3
+			ADD.W		#8,D0
+			ADD.W		#1,A0
+
+;			Update output pointer
+
+@3			ADD.W		#1,A1
+
+;			Close loop
+
+			DBF 		D2,@1
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			END

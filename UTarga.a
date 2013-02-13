@@ -1,0 +1,252 @@
+;Photoshop version 1.0.1, file: UTarga.a
+;  Computer History Museum, www.computerhistory.org
+;  This material is (C)Copyright 1990 Adobe Systems Inc.
+;  It may not be distributed to third parties.
+;  It is licensed for non-commercial use according to 
+;  www.computerhistory.org/softwarelicense/photoshop/ 
+
+			INCLUDE 	'Traps.a'
+
+; **********************************************************************
+
+			SEG 	'ATargaFormat'
+
+Targa16Red	PROC	EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE Targa16Red (srcPtr: Ptr;
+;								  dstPtr: Ptr;
+;								  count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	14
+@dstPtr 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	10
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Unload parameters
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Do extraction
+
+@1			MOVE.W		(A0)+,D1
+			LSL.B		#1,D1
+			AND.B		#$F8,D1
+			MOVE.B		D1,D2
+			LSR.B		#5,D2
+			ADD.B		D2,D1
+			MOVE.B		D1,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 	'ATargaFormat'
+
+Targa16Green	PROC	EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE Targa16Green (srcPtr: Ptr;
+;									dstPtr: Ptr;
+;									count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	14
+@dstPtr 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	10
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Unload parameters
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Do extraction
+
+@1			MOVE.W		(A0)+,D1
+			ROL.W		#6,D1
+			AND.B		#$F8,D1
+			MOVE.B		D1,D2
+			LSR.B		#5,D2
+			ADD.B		D2,D1
+			MOVE.B		D1,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 	'ATargaFormat'
+
+Targa16Blue 	PROC	EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE Targa16Blue (srcPtr: Ptr;
+;								   dstPtr: Ptr;
+;								   count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	14
+@dstPtr 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	10
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Unload parameters
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Do extraction
+
+@1			MOVE.W		(A0)+,D1
+			LSR.W		#5,D1
+			AND.B		#$F8,D1
+			MOVE.B		D1,D2
+			LSR.B		#5,D2
+			ADD.B		D2,D1
+			MOVE.B		D1,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 	'ATargaFormat'
+
+DecodeTargaRLE	PROC	EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DecodeTargaRLE (VAR srcPtr: Ptr;
+;									  VAR dstPtr: Ptr;
+;									  count: LONGINT;
+;									  size: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	18
+@dstPtr 	EQU 	14
+@count		EQU 	10
+@size		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	14
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2/D3,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		(A0),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.L		(A1),A1
+			MOVE.L		@count(A6),D0
+			MOVE.W		@size(A6),D1
+
+;			Get next packet header
+
+@1			CLR.L		D2
+			MOVE.B		(A0)+,D2
+			BMI.S		@3
+
+;			Process a raw packet
+
+			ADD.W		#1,D2
+			SUB.L		D2,D0
+			MULU.W		D1,D2
+			SUB.W		#1,D2
+@2			MOVE.B		(A0)+,(A1)+
+			DBF 		D2,@2
+			BRA.S		@6
+
+;			Process a repeat packet
+
+@3			AND.B		#$7F,D2
+			SUB.L		D2,D0
+			SUB.L		#1,D0
+@4			MOVE.L		A0,A2
+			MOVE.W		D1,D3
+			SUB.W		#1,D3
+@5			MOVE.B		(A2)+,(A1)+
+			DBF 		D3,@5
+			DBF 		D2,@4
+			MOVE.L		A2,A0
+
+;			Move to next pixel
+
+@6			TST.L		D0
+			BGT.S		@1
+
+;			Return pointers
+
+			MOVE.L		@srcPtr(A6),A2
+			MOVE.L		A0,(A2)
+			MOVE.L		@dstPtr(A6),A2
+			MOVE.L		A1,(A2)
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2/D3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			END

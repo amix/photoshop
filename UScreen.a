@@ -1,0 +1,1258 @@
+;Photoshop version 1.0.1, file: UScreen.a
+;  Computer History Museum, www.computerhistory.org
+;  This material is (C)Copyright 1990 Adobe Systems Inc.
+;  It may not be distributed to third parties.
+;  It is licensed for non-commercial use according to 
+;  www.computerhistory.org/softwarelicense/photoshop/ 
+
+			INCLUDE 	'Traps.a'
+
+; **********************************************************************
+
+					SEG 		'AScreen'
+
+InsideUnitCell		PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			FUNCTION InsideUnitCell (row: INTEGER;
+;									 col: INTEGER;
+;									 j: INTEGER;
+;									 k: INTEGER): BOOLEAN;
+;
+;			Parameter Offsets
+
+@result 	EQU 	16
+@row		EQU 	14
+@col		EQU 	12
+@j			EQU 	10
+@k			EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	8
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Assume outside
+
+			CLR.B		@result(A6)
+
+;			Compute base distance
+
+			MOVE.W		@row(A6),D2
+			MULS.W		D2,D2
+			MOVE.W		@col(A6),D1
+			MULS.W		D1,D1
+			ADD.L		D1,D2
+
+;			Test right side
+
+			MOVE.W		@j(A6),D0
+			SUB.W		@row(A6),D0
+			MULS.W		D0,D0
+			MOVE.W		@k(A6),D1
+			SUB.W		@col(A6),D1
+			MULS.W		D1,D1
+			ADD.L		D1,D0
+			CMP.L		D0,D2
+			BGE.S		@exit
+
+;			Test top side
+
+			MOVE.W		@k(A6),D0
+			ADD.W		@row(A6),D0
+			MULS.W		D0,D0
+			MOVE.W		@j(A6),D1
+			SUB.W		@col(A6),D1
+			MULS.W		D1,D1
+			ADD.L		D1,D0
+			CMP.L		D0,D2
+			BGE.S		@exit
+
+;			Test left side
+
+			MOVE.W		@j(A6),D0
+			ADD.W		@row(A6),D0
+			MULS.W		D0,D0
+			MOVE.W		@k(A6),D1
+			ADD.W		@col(A6),D1
+			MULS.W		D1,D1
+			ADD.L		D1,D0
+			CMP.L		D0,D2
+			BGT.S		@exit
+
+;			Test bottom side
+
+			MOVE.W		@k(A6),D0
+			SUB.W		@row(A6),D0
+			MULS.W		D0,D0
+			MOVE.W		@j(A6),D1
+			ADD.W		@col(A6),D1
+			MULS.W		D1,D1
+			ADD.L		D1,D0
+			CMP.L		D0,D2
+			BGT.S		@exit
+
+;			Must be inside
+
+			MOVE.B		#1,@result(A6)
+
+;			Clean up and exit
+
+@exit		UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'AScreen'
+
+CvtToGridCoords 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE CvtToGridCoords (row: INTEGER;
+;									   col: INTEGER;
+;									   cosTheta: INTEGER;
+;									   sinTheta: INTEGER;
+;									   frequency: LONGINT;
+;									   VAR x: INTEGER;
+;									   VAR y: INTEGER;
+;									   VAR xf: INTEGER;
+;									   VAR yf: INTEGER);
+;
+;			Parameter Offsets
+
+@row		EQU 	34
+@col		EQU 	32
+@cosTheta	EQU 	30
+@sinTheta	EQU 	28
+@frequency	EQU 	24
+@x			EQU 	20
+@y			EQU 	16
+@xf 		EQU 	12
+@yf 		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	28
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Rotate x coordinate
+
+			MOVE.W		@row(A6),D0
+			MULS.W		@cosTheta(A6),D0
+			MOVE.W		@col(A6),D1
+			MULS.W		@sinTheta(A6),D1
+			ADD.L		D1,D0
+			ASL.L		#2,D0
+			BPL.S		@A1
+			NEG.L		D0
+			SWAP		D0
+			NEG.W		D0
+			BRA.S		@A2
+@A1 		SWAP		D0
+
+;			Scale and offset x coordinate
+
+@A2 		MOVE.L		@frequency(A6),D2
+			MOVE.W		D0,D1
+			BMI.S		@1
+			MULU.W		D2,D1
+			CLR.W		D1
+			SWAP		D1
+			SWAP		D2
+			MULU.W		D2,D0
+			ADD.L		D1,D0
+			ASR.L		#3,D0
+			BRA.S		@2
+@1			NEG.W		D0
+			NEG.W		D1
+			MULU.W		D2,D1
+			CLR.W		D1
+			SWAP		D1
+			SWAP		D2
+			MULU.W		D2,D0
+			ADD.L		D1,D0
+			ASR.L		#3,D0
+			NEG.L		D0
+@2			ADD.L		#$00008000,D0
+
+;			Return x fraction
+
+			TST.W		D0
+			BNE.S		@3
+			ADD.W		#1,D0
+@3			SUB.W		#$8000,D0
+			MOVE.L		@xf(A6),A0
+			MOVE.W		D0,(A0)
+
+;			Return x coordinate
+
+			SWAP		D0
+			MOVE.L		@x(A6),A0
+			MOVE.W		D0,(A0)
+
+;			Rotate y coordinate
+
+			MOVE.W		@col(A6),D0
+			MULS.W		@cosTheta(A6),D0
+			MOVE.W		@row(A6),D1
+			MULS.W		@sinTheta(A6),D1
+			SUB.L		D1,D0
+			ASL.L		#2,D0
+			BPL.S		@B1
+			NEG.L		D0
+			SWAP		D0
+			NEG.W		D0
+			BRA.S		@B2
+@B1 		SWAP		D0
+
+;			Scale and offset y coordinate
+
+@B2 		MOVE.L		@frequency(A6),D2
+			MOVE.W		D0,D1
+			BMI.S		@4
+			MULU.W		D2,D1
+			CLR.W		D1
+			SWAP		D1
+			SWAP		D2
+			MULU.W		D2,D0
+			ADD.L		D1,D0
+			ASR.L		#3,D0
+			BRA.S		@5
+@4			NEG.W		D0
+			NEG.W		D1
+			MULU.W		D2,D1
+			CLR.W		D1
+			SWAP		D1
+			SWAP		D2
+			MULU.W		D2,D0
+			ADD.L		D1,D0
+			ASR.L		#3,D0
+			NEG.L		D0
+@5			ADD.L		#$00008000,D0
+
+;			Return y fraction
+
+			TST.W		D0
+			BNE.S		@6
+			ADD.W		#1,D0
+@6			SUB.W		#$8000,D0
+			MOVE.L		@yf(A6),A0
+			MOVE.W		D0,(A0)
+
+;			Return y coordinate
+
+			SWAP		D0
+			MOVE.L		@y(A6),A0
+			MOVE.W		D0,(A0)
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'AScreen'
+
+NormGridCoords		PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE NormGridCoords (m: INTEGER;
+;									  n: INTEGER;
+;									  hs: LONGINT;
+;									  VAR x: INTEGER;
+;									  VAR y: INTEGER);
+;
+;			Parameter Offsets
+
+@m			EQU 	22
+@n			EQU 	20
+@hs 		EQU 	16
+@x			EQU 	12
+@y			EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	16
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D4,-(SP)
+
+;			Unload parameters
+
+			MOVE.W		@m(A6),D0
+			MOVE.W		@n(A6),D1
+			MOVE.L		@hs(A6),D2
+			MOVE.L		@x(A6),A0
+			MOVE.L		@y(A6),A1
+
+;			Normalize in x direction
+
+			MOVE.W		D0,D3
+			MULS.W		(A0),D3
+			MOVE.W		D1,D4
+			MULS.W		(A1),D4
+			SUB.L		D4,D3
+
+			BPL.S		@2
+@1			ADD.W		D0,(A0)
+			SUB.W		D1,(A1)
+			ADD.L		D2,D3
+			BMI.S		@1
+
+@2			SUB.L		D2,D3
+			BMI.S		@3
+			SUB.W		D0,(A0)
+			ADD.W		D1,(A1)
+			BRA.S		@2
+
+;			Normalize in y direction
+
+@3			MOVE.W		D1,D3
+			MULS.W		(A0),D3
+			MOVE.W		D0,D4
+			MULS.W		(A1),D4
+			ADD.L		D4,D3
+
+			BPL.S		@5
+@4			ADD.W		D1,(A0)
+			ADD.W		D0,(A1)
+			ADD.L		D2,D3
+			BMI.S		@4
+
+@5			SUB.L		D2,D3
+			BMI.S		@6
+			SUB.W		D1,(A0)
+			SUB.W		D0,(A1)
+			BRA.S		@5
+
+;			Clean up and exit
+
+@6			MOVEM.L 	(SP)+,D3-D4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'AScreen'
+
+DotScreenProc	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			FUNCTION DotScreenProc (x: INTEGER;
+;									y: INTEGER): LONGINT;
+;
+;			Parameter Offsets
+
+@result 	EQU 	12
+@x			EQU 	10
+@y			EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	4
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Find ABS (x)
+
+			MOVE.W		@x(A6),D0
+			BPL.S		@1
+			NEG.W		D0
+
+;			Find ABS (y)
+
+@1			MOVE.W		@y(A6),D1
+			BPL.S		@2
+			NEG.W		D1
+
+;			Compare sum to 1.0
+
+@2			MOVE.W		D0,D2
+			ADD.W		D1,D2
+			BMI.S		@3
+
+;			Sum is < 1.0
+
+			MULU.W		D0,D0
+			MULU.W		D1,D1
+			ADD.L		D1,D0
+			SUB.L		#$7FFFFFFF,D0
+			NEG.L		D0
+			BRA.S		@4
+
+;			Sum is >= 1.0
+
+@3			SUB.W		#$7FFF,D0
+			MULS.W		D0,D0
+			SUB.W		#$7FFF,D1
+			MULS.W		D1,D1
+			ADD.L		D1,D0
+			SUB.L		#$7FFFFFFF,D0
+
+;			Return result
+
+@4			MOVE.L		D0,@result(A6)
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'AScreen'
+
+EllipseScreenProc	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			FUNCTION EllipseScreenProc (x: INTEGER;
+;										y: INTEGER): LONGINT;
+;
+;			Parameter Offsets
+
+@result 	EQU 	12
+@x			EQU 	10
+@y			EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	4
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Find ABS (x)
+
+			MOVE.W		@x(A6),D0
+			BPL.S		@1
+			NEG.W		D0
+
+;			Find ABS (y)
+
+@1			MOVE.W		@y(A6),D1
+			BPL.S		@2
+			NEG.W		D1
+
+;			Compute index
+
+@2			MOVE.W		#3,D2
+			MULU.W		D0,D2
+			MOVE.W		#4,D3
+			MULU.W		D1,D3
+			ADD.L		D3,D2
+			SUB.L		#$18000,D2
+
+;			If index is negative, inside of black ellipse
+
+			BPL.S		@3
+			MULU.W		D0,D0
+			MULU.W		#4,D1
+			DIVU.W		#3,D1
+			MULU.W		D1,D1
+			ADD.L		D1,D0
+			LSR.L		#1,D0
+			SUB.L		#$7FFFFFFF,D0
+			NEG.L		D0
+			BRA.S		@5
+
+;			If index is greater than one, inside of white ellipse
+
+@3			CMP.L		#$7FFF,D2
+			BLE.S		@4
+			SUB.W		#$7FFF,D0
+			NEG.W		D0
+			SUB.W		#$7FFF,D1
+			NEG.W		D1
+			MULU.W		D0,D0
+			MULU.W		#4,D1
+			DIVU.W		#3,D1
+			MULU.W		D1,D1
+			ADD.L		D1,D0
+			LSR.L		#1,D0
+			SUB.L		#$7FFFFFFF,D0
+			BRA.S		@5
+
+;			Else just scale index value
+
+@4			MOVE.W		D2,D0
+			NEG.W		D0
+			EXT.L		D0
+
+;			Return result
+
+@5			MOVE.L		D0,@result(A6)
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'AScreen'
+
+LineScreenProc	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			FUNCTION LineScreenProc (x: INTEGER;
+;									 y: INTEGER): LONGINT;
+;
+;			Parameter Offsets
+
+@result 	EQU 	12
+@x			EQU 	10
+@y			EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	4
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Return 1.0 - ABS (y)
+
+			MOVE.W		@y(A6),D0
+			BPL.S		@1
+			NEG.W		D0
+@1			SUB.W		#$7FFF,D0
+			NEG.W		D0
+			EXT.L		D0
+			MOVE.L		D0,@result(A6)
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'AScreen'
+
+SquareScreenProc	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			FUNCTION SquareScreenProc (x: INTEGER;
+;									   y: INTEGER): LONGINT;
+;
+;			Parameter Offsets
+
+@result 	EQU 	12
+@x			EQU 	10
+@y			EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	4
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Return 1.0 - MAX (ABS (x), ABS (y))
+
+			MOVE.W		@x(A6),D0
+			BPL.S		@1
+			NEG.W		D0
+@1			MOVE.W		@y(A6),D1
+			BPL.S		@2
+			NEG.W		D1
+@2			CMP.W		D1,D0
+			BGE.S		@3
+			MOVE.W		D1,D0
+@3			SUB.W		#$7FFF,D0
+			NEG.W		D0
+			EXT.L		D0
+			MOVE.L		D0,@result(A6)
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'AScreen'
+
+CrossScreenProc 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			FUNCTION CrossScreenProc (x: INTEGER;
+;									  y: INTEGER): LONGINT;
+;
+;			Parameter Offsets
+
+@result 	EQU 	12
+@x			EQU 	10
+@y			EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	4
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Return 1.0 - MIN (ABS (x), ABS (y))
+
+			MOVE.W		@x(A6),D0
+			BPL.S		@1
+			NEG.W		D0
+@1			MOVE.W		@y(A6),D1
+			BPL.S		@2
+			NEG.W		D1
+@2			CMP.W		D1,D0
+			BLE.S		@3
+			MOVE.W		D1,D0
+@3			SUB.W		#$7FFF,D0
+			NEG.W		D0
+			EXT.L		D0
+			MOVE.L		D0,@result(A6)
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'AScreen'
+
+CompareCells	PROC		EXPORT
+
+;			Calling sequence (C conventions):
+;
+;			int CompareCells (elem1, elem2)
+;				char *elem1;
+;				char *elem2;
+;
+;			Unload parameters
+
+			MOVE.L		4(SP),A0
+			MOVE.L		8(SP),A1
+
+;			Compare first long word
+
+			MOVE.L		(A0)+,D0
+			CMP.L		(A1)+,D0
+			BGT.S		@1
+			BLT.S		@2
+
+;			Compare next short word
+
+			MOVE.W		(A0)+,D0
+			CMP.W		(A1)+,D0
+			BGT.S		@1
+			BLT.S		@2
+
+;			Compare next short word
+
+			MOVE.W		(A0)+,D0
+			CMP.W		(A1)+,D0
+			BGT.S		@1
+			BLT.S		@2
+
+;			Compare last short word
+
+			MOVE.W		(A0),D0
+			CMP.W		(A1),D0
+			BGT.S		@1
+			BLT.S		@2
+
+;			Entries are equal
+
+			CLR.L		D0
+			RTS
+
+;			First entry is greater
+
+@1			MOVE.L		#-1,D0
+			RTS
+
+;			First entry is lesser
+
+@2			MOVE.L		#1,D0
+			RTS
+
+; **********************************************************************
+
+					SEG 		'ARes'
+
+ClusterOffset		PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			FUNCTION ClusterOffset (xCell: INTEGER;
+;									yCell: INTEGER;
+;									cluster: INTEGER): INTEGER;
+;
+;			Parameter Offsets
+
+@result 	EQU 	14
+@xCell		EQU 	12
+@yCell		EQU 	10
+@cluster	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	6
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Look up in table
+
+			LEA 		@table,A0
+			MOVE.W		@xCell(A6),D0
+			AND.W		#7,D0
+			LSL.W		#3,D0
+			ADDA.W		D0,A0
+			MOVE.W		@yCell(A6),D0
+			AND.W		#7,D0
+			MOVE.B		(A0,D0.W),D0
+
+;			Adjust to required number of bits
+
+			MOVE.W		#6,D1
+			SUB.W		@cluster(A6),D1
+			LSR.W		D1,D0
+			MOVE.W		D0,@result(A6)
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+;			Offset table
+
+@table		DC.B		 0, 32,  8, 40,  2, 34, 10, 42
+			DC.B		48, 16, 56, 24, 50, 18, 58, 26
+			DC.B		12, 44,  4, 36, 14, 46,  6, 38
+			DC.B		60, 28, 52, 20, 62, 30, 54, 22
+			DC.B		 3, 35, 11, 43,  1, 33,  9, 41
+			DC.B		51, 19, 59, 27, 49, 17, 57, 25
+			DC.B		15, 47,  7, 39, 13, 45,  5, 37
+			DC.B		63, 31, 55, 23, 61, 29, 53, 21
+
+; **********************************************************************
+
+					SEG 		'AScreen'
+
+CompScreenValues	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE CompScreenValues (buffer: Ptr;
+;										count: INTEGER;
+;										rowBase: INTEGER;
+;										colBase: INTEGER;
+;										cluster: INTEGER;
+;										offset: INTEGER;
+;										cellData: Ptr;
+;										cellSize: INTEGER);
+;
+;			Parameter Offsets
+
+@buffer 	EQU 	24
+@count		EQU 	22
+@rowBase	EQU 	20
+@colBase	EQU 	18
+@cluster	EQU 	16
+@offset 	EQU 	14
+@cellData	EQU 	10
+@cellSize	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	20
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2/D3-D6,-(SP)
+
+;			D0 = count
+
+			MOVE.W		@count(A6),D0
+
+;			D1 = cluster
+
+			MOVE.W		@cluster(A6),D1
+
+;			D2 = offset
+
+			MOVE.W		@offset(A6),D2
+
+;			D3 = cellSize
+
+			MOVE.W		@cellSize(A6),D3
+
+;			D4 = 2 * (count << cluster)
+
+			MOVE.W		D0,D4
+			ASL.W		D1,D4
+			ADD.W		D4,D4
+
+;			D5 = counter
+
+			CLR.W		D5
+
+;			A0 = pointer to buffer
+
+			MOVE.L		@buffer(A6),A0
+
+;			A1 = pointer to data
+
+			MOVE.L		@cellData(A6),A1
+
+;			Compute data offset
+
+@1			MOVE.L		A1,A2
+			ADDA.W		#6,A0
+
+			MOVE.W		(A0)+,D6
+			ADD.W		@rowBase(A6),D6
+@2			SUB.W		D3,D6
+			BPL.S		@2
+@3			ADD.W		D3,D6
+			BMI.S		@3
+			MULU.W		D3,D6
+			ADDA.L		D6,A2
+
+			MOVE.W		(A0)+,D6
+			ADD.W		@colBase(A6),D6
+@4			SUB.W		D3,D6
+			BPL.S		@4
+@5			ADD.W		D3,D6
+			BMI.S		@5
+			ADDA.W		D6,A2
+
+;			Scale and add offset
+
+			MOVE.W		D5,D6
+			ASL.W		D1,D6
+			ADD.W		D2,D6
+
+;			Map into 1..255
+
+			ADD.W		D6,D6
+			ADD.W		#1,D6
+			MULU.W		#255,D6
+			DIVU.W		D4,D6
+			ADD.W		#1,D6
+
+;			Save value
+
+			MOVE.B		D6,(A2)
+
+;			Move to next cell entry
+
+			ADD.W		#1,D5
+			CMP.W		D0,D5
+			BNE.S		@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2/D3-D6
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'AScreen'
+
+DoStepSwapBytes 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoStepSwapBytes (dataPtr1: Ptr;
+;									   dataPtr2: Ptr;
+;									   count: INTEGER;
+;									   step1: INTEGER;
+;									   step2: INTEGER);
+;
+;			Parameter Offsets
+
+@dataPtr1	EQU 	18
+@dataPtr2	EQU 	14
+@count		EQU 	12
+@step1		EQU 	10
+@step2		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	14
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVE.L		D3,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@dataPtr1(A6),A0
+			MOVE.L		@dataPtr2(A6),A1
+			MOVE.W		@step1(A6),D0
+			MOVE.W		@step2(A6),D1
+			MOVE.W		@count(A6),D2
+
+;			Swap the bytes
+
+			SUB.W		#1,D2
+			BMI.S		@2
+@1			MOVE.B		(A0),D3
+			MOVE.B		(A1),(A0)
+			MOVE.B		D3,(A1)
+			ADDA.W		D0,A0
+			ADDA.W		D1,A1
+			DBF 		D2,@1
+
+;			Clean up and exit
+
+@2			MOVE.L		(SP)+,D3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ARes'
+
+MakeWhiteNoise	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE MakeWhiteNoise (data: Ptr;
+;									  count: LONGINT;
+;									  min: INTEGER;
+;									  max: INTEGER);
+;
+;			Parameter Offsets
+
+@data		EQU 	16
+@count		EQU 	12
+@min		EQU 	10
+@max		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	12
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D7/A2,-(SP)
+
+;			A2 is output pointer
+
+			MOVE.L		@data(A6),A2
+
+;			D7 is counter
+
+			MOVE.L		@count(A6),D7
+
+;			D6 is min
+
+			MOVE.W		@min(A6),D6
+
+;			D5 is max - min
+
+			MOVE.W		@max(A6),D5
+			SUB.W		D6,D5
+
+;			D4 is mask
+
+			MOVE.W		#-1,D4
+@1			LSR.W		#1,D4
+			CMP.W		D5,D4
+			BGT.S		@1
+			LSL.W		#1,D4
+			ADD.W		#1,D4
+
+;			Compute noise values
+
+@2			CLR.W		-(SP)
+			_Random
+			MOVE.W		(SP)+,D3
+			LSR.W		#6,D3
+			AND.W		D4,D3
+			CMP.W		D5,D3
+			BGT.S		@2
+			ADD.W		D6,D3
+			MOVE.B		D3,(A2)+
+			SUB.L		#1,D7
+			BNE.S		@2
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D7/A2
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'AScreen'
+
+DoScreenRow 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoScreenRow (srcPtr: Ptr;
+;								   dstPtr: Ptr;
+;								   count: INTEGER;
+;								   cellData: Ptr;
+;								   cellSize: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	20
+@dstPtr 	EQU 	16
+@count		EQU 	14
+@cellData	EQU 	10
+@cellSize	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	16
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2/D3-D4,-(SP)
+
+;			Unload Address
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.L		@cellData(A6),A2
+
+;			D0 is loop counter
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			D1 is output buffer
+
+			MOVEQ		#1,D1
+
+;			D2 is cellSize
+
+			MOVE.W		@cellSize(A6),D2
+
+;			D3 is cell counter
+
+			MOVE.W		D2,D3
+
+;			Compute next output bit
+
+@1			MOVE.B		(A0)+,D4
+			ADD.B		(A2)+,D4
+			ROXL.W		#1,D1
+
+;			See if another word should be output
+
+			BCC.S		@2
+			NOT.W		D1
+			MOVE.W		D1,(A1)+
+			MOVEQ		#1,D1
+
+;			Update screen pointer
+
+@2			SUB.W		#1,D3
+			BNE.S		@3
+			SUBA.W		D2,A2
+			MOVE.W		D2,D3
+
+;			Move to next bit
+
+@3			DBF 		D0,@1
+
+;			Output final word, if needed
+
+			CMP.W		#1,D1
+			BEQ.S		@5
+@4			LSL.W		#1,D1
+			BCC.S		@4
+			NOT.W		D1
+			MOVE.W		D1,(A1)
+
+;			Clean up and exit
+
+@5			MOVEM.L 	(SP)+,A2/D3-D4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'AScreen'
+
+DoDiffuseRow	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoDiffuseRow (srcPtr: Ptr;
+;									dstPtr: Ptr;
+;									thisError: Ptr;
+;									nextError: Ptr;
+;									noisePtr: Ptr;
+;									count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	26
+@dstPtr 	EQU 	22
+@thisError	EQU 	18
+@nextError	EQU 	14
+@noisePtr	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	22
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D7/A2-A4,-(SP)
+
+;			A0 is input pointer
+
+			MOVE.L		@srcPtr(A6),A0
+
+;			A1 and D0 is output pointers
+
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.B		#$80,D0
+
+;			A2 and A3 point to error buffers
+
+			MOVE.L		@thisError(A6),A2
+			MOVE.L		@nextError(A6),A3
+
+;			A4 points to the dither noise
+
+			MOVE.L		@noisePtr(A6),A4
+
+;			D6 contains the constant 255
+
+			MOVE.W		#255,D6
+
+;			D7 contains the constant 128
+
+			MOVE.W		#128,D7
+
+;			Loop through pixels
+
+			MOVE.W		@count(A6),D2
+			SUB.W		#1,D2
+
+;			Unload pixel value
+
+@2			CLR.W		D4
+			MOVE.B		(A0)+,D4
+			MOVE.B		D4,D5
+
+;			Add in its diffused error
+
+			ADD.W		(A2)+,D4
+
+;			Always preserve black and white
+
+			TST.B		D5
+			BEQ.S		@3
+			NOT.B		D5
+			BEQ.S		@4
+
+;			Add noise and threshold value
+
+			MOVE.B		(A4)+,D5
+			EXT.W		D5
+			ADD.W		D4,D5
+			CMP.W		D7,D5
+			BGE.S		@4
+
+;			Case 1: black
+
+@3			OR.B		D0,(A1)
+			BRA.S		@5
+
+;			Case 2: white
+
+@4			SUB.W		D6,D4
+
+;			Diffuse error value
+
+@5			MOVE.W		D4,D5
+			ASR.W		#2,D5
+			SUB.W		D5,D4
+			ASR.W		#1,D4
+			ADD.W		D4,(A2)
+			ADD.W		D4,(A3)+
+			ADD.W		D5,-4(A3)
+
+;			Move to next pixel
+
+			ROR.B		#1,D0
+			BCC.S		@6
+			ADDA.W		#1,A1
+@6			DBF 		D2,@2
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D7/A2-A4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			END

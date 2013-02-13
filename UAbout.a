@@ -1,0 +1,69 @@
+;Photoshop version 1.0.1, file: UAbout.a
+;  Computer History Museum, www.computerhistory.org
+;  This material is (C)Copyright 1990 Adobe Systems Inc.
+;  It may not be distributed to third parties.
+;  It is licensed for non-commercial use according to 
+;  www.computerhistory.org/softwarelicense/photoshop/ 
+
+			INCLUDE 	'Traps.a'
+			INCLUDE 	'QuickEqu.a'
+
+; **********************************************************************
+
+				SEG 		'ADoAbout'
+
+CodedChecksum	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			FUNCTION CodedChecksum (srcPtr: Ptr;
+;									count: INTEGER): LONGINT;
+;
+;			Parameter Offsets
+
+@result 	EQU 	14
+@srcPtr 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	6
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A4/D5-D7,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@srcPtr(A6),A4
+			MOVE.W		@count(A6),D7
+			SUB.W		#1,D7
+
+;			Loop though bytes
+
+			CLR.L		D6
+@1			CLR.W		D5
+			MOVE.B		(A4)+,D5
+			ADD.W		#1,D5
+			CLR.W		-(SP)
+			_Random
+			MULU.W		(SP)+,D5
+			ADD.L		D5,D6
+			DBF 		D7,@1
+
+;			Return result
+
+			MOVE.L		D6,@result(A6)
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A4/D5-D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			END

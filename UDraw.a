@@ -1,0 +1,1785 @@
+;Photoshop version 1.0.1, file: UDraw.a
+;  Computer History Museum, www.computerhistory.org
+;  This material is (C)Copyright 1990 Adobe Systems Inc.
+;  It may not be distributed to third parties.
+;  It is licensed for non-commercial use according to 
+;  www.computerhistory.org/softwarelicense/photoshop/ 
+
+			INCLUDE 	'Traps.a'
+
+; **********************************************************************
+
+				SEG 		'ADoDraw'
+
+DoEraseRect 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoEraseRect (dataPtr: Ptr;
+;								   dataWidth: INTEGER;
+;								   rows: INTEGER;
+;								   cols: INTEGER;
+;								   color: INTEGER);
+;
+;			Parameter Offsets
+
+@dataPtr	EQU 	16
+@dataWidth	EQU 	14
+@rows		EQU 	12
+@cols		EQU 	10
+@color		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	12
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D4,-(SP)
+
+;			Unload address
+
+			MOVE.L		@dataPtr(A6),A0
+
+;			Unload background color
+
+			MOVE.W		@color(A6),D2
+
+;			D3 is cols - 1
+
+			MOVE.W		@cols(A6),D3
+			SUB.W		#1,D3
+
+;			D4 is data width
+
+			MOVE.W		@dataWidth(A6),D4
+
+;			Loop through rows and columns
+
+			MOVE.W		@rows(A6),D0
+			SUB.W		#1,D0
+
+@1			MOVE.L		A0,A1
+			MOVE.W		D3,D1
+
+;			Copy value
+
+@2			MOVE.B		D2,(A1)+
+
+;			Move to next pixel
+
+			DBF 		D1,@2
+			ADDA.W		D4,A0
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoDraw'
+
+DoMagicRect 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoMagicRect (srcPtr: Ptr;
+;								   dstPtr: Ptr;
+;								   dataWidth: INTEGER;
+;								   rows: INTEGER;
+;								   cols: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	18
+@dstPtr 	EQU 	14
+@dataWidth	EQU 	12
+@rows		EQU 	10
+@cols		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	14
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3/D3,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+
+;			D2 is data width
+
+			MOVE.W		@dataWidth(A6),D2
+
+;			D3 is cols - 1
+
+			MOVE.W		@cols(A6),D3
+			SUB.W		#1,D3
+
+;			Loop through rows and columns
+
+			MOVE.W		@rows(A6),D0
+			SUB.W		#1,D0
+
+@1			MOVE.L		A0,A2
+			MOVE.L		A1,A3
+			MOVE.W		D3,D1
+
+;			Copy value
+
+@2			MOVE.B		(A2)+,(A3)+
+
+;			Move to next pixel
+
+			DBF 		D1,@2
+			ADDA.W		D2,A0
+			ADDA.W		D2,A1
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3/D3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoDraw'
+
+DoAlphaEraseRect	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoAlphaEraseRect (dataPtr: Ptr;
+;										alphaPtr: Ptr;
+;										dataWidth: INTEGER;
+;										rows: INTEGER;
+;										cols: INTEGER;
+;										color: INTEGER);
+;
+;			Parameter Offsets
+
+@dataPtr	EQU 	20
+@alphaPtr	EQU 	16
+@dataWidth	EQU 	14
+@rows		EQU 	12
+@cols		EQU 	10
+@color		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	16
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3/D3-D7,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@dataPtr(A6),A0
+			MOVE.L		@alphaPtr(A6),A1
+
+;			Unload background color
+
+			MOVE.W		@color(A6),D2
+
+;			D3 is cols - 1
+
+			MOVE.W		@cols(A6),D3
+			SUB.W		#1,D3
+
+;			D4 is data width
+
+			MOVE.W		@dataWidth(A6),D4
+
+;			Loop through rows and columns
+
+			MOVE.W		@rows(A6),D0
+			SUB.W		#1,D0
+
+@1			MOVE.L		A0,A2
+			MOVE.L		A1,A3
+			MOVE.W		D3,D1
+
+;			Get mask value
+
+			CLR.W		D5
+			CLR.W		D7
+@2			MOVE.B		(A3)+,D5
+
+;			If zero, leave value alone
+
+			BEQ.S		@4
+
+;			If equal to 255, set to background color
+
+			CMP.B		#255,D5
+			BEQ.S		@3
+
+;			Compute weighted average
+
+			MOVE.W		#256,D6
+			SUB.W		D5,D6
+			MULU.W		D2,D5
+			MOVE.B		(A2),D7
+			MULU.W		D7,D6
+			ADD.W		D6,D5
+			ADD.W		#128,D5
+			LSR.W		#8,D5
+			MOVE.B		D5,(A2)
+			BRA.S		@4
+
+;			Set to background
+
+@3			MOVE.B		D2,(A2)
+
+;			Move to next pixel
+
+@4			ADDA.W		#1,A2
+			DBF 		D1,@2
+			ADDA.W		D4,A0
+			ADDA.W		D4,A1
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3/D3-D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoDraw'
+
+DoAlphaMagicRect	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoAlphaMagicRect (srcPtr: Ptr;
+;										dstPtr: Ptr;
+;										alphaPtr: Ptr;
+;										dataWidth: INTEGER;
+;										rows: INTEGER;
+;										cols: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	22
+@dstPtr 	EQU 	18
+@alphaPtr	EQU 	14
+@dataWidth	EQU 	12
+@rows		EQU 	10
+@cols		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A5/D3-D7,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.L		@alphaPtr(A6),A2
+
+;			D3 is cols - 1
+
+			MOVE.W		@cols(A6),D3
+			SUB.W		#1,D3
+
+;			D4 is data width
+
+			MOVE.W		@dataWidth(A6),D4
+
+;			Loop through rows and columns
+
+			MOVE.W		@rows(A6),D0
+			SUB.W		#1,D0
+
+@1			MOVE.L		A0,A3
+			MOVE.L		A1,A4
+			MOVE.L		A2,A5
+			MOVE.W		D3,D1
+
+			CLR.W		D5
+			CLR.W		D7
+			CLR.W		D2
+
+;			Get buffer value
+
+@2			MOVE.B		(A3)+,D2
+
+;			Get mask value
+
+			MOVE.B		(A5)+,D5
+
+;			If zero, leave value alone
+
+			BEQ.S		@4
+
+;			If equal to 255, set to buffer
+
+			CMP.B		#255,D5
+			BEQ.S		@3
+
+;			Compute weighted average
+
+			MOVE.W		#256,D6
+			SUB.W		D5,D6
+			MULU.W		D2,D5
+			MOVE.B		(A4),D7
+			MULU.W		D7,D6
+			ADD.W		D6,D5
+			ADD.W		#128,D5
+			LSR.W		#8,D5
+			MOVE.B		D5,(A4)
+			BRA.S		@4
+
+;			Set to background
+
+@3			MOVE.B		D2,(A4)
+
+;			Move to next pixel
+
+@4			ADDA.W		#1,A4
+			DBF 		D1,@2
+			ADDA.W		D4,A0
+			ADDA.W		D4,A1
+			ADDA.W		D4,A2
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A5/D3-D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoDraw'
+
+DoAlphaMask 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoAlphaMask (maskPtr: Ptr;
+;								   alphaPtr: Ptr;
+;								   maskWidth: INTEGER;
+;								   alphaWidth: INTEGER;
+;								   rows: INTEGER;
+;								   cols: INTEGER);
+;
+;			Parameter Offsets
+
+@maskPtr	EQU 	20
+@alphaPtr	EQU 	16
+@maskWidth	EQU 	14
+@alphaWidth EQU 	12
+@rows		EQU 	10
+@cols		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	16
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3/D3-D7,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@maskPtr(A6),A0
+			MOVE.L		@alphaPtr(A6),A1
+
+;			D3 is cols - 1
+
+			MOVE.W		@cols(A6),D3
+			SUB.W		#1,D3
+
+;			D4 is mask width
+
+			MOVE.W		@maskWidth(A6),D4
+
+;			D7 is alpha width
+
+			MOVE.W		@alphaWidth(A6),D7
+
+;			D5 is 255
+
+			MOVE.W		#255,D5
+
+;			Loop through rows and columns
+
+			MOVE.W		@rows(A6),D0
+			SUB.W		#1,D0
+
+@1			MOVE.L		A0,A2
+			MOVE.L		A1,A3
+			MOVE.W		D3,D1
+
+;			Case 1: alpha = 0
+
+@2			CLR.L		D2
+			MOVE.B		(A3)+,D2
+			BNE.S		@3
+			CLR.B		(A2)
+			BRA.S		@5
+
+;			Case 2: alpha = 255
+
+@3			CMP.W		D5,D2
+			BEQ.S		@5
+
+;			Case 3: 0 < alpha < 255 and mask = 0
+
+			CLR.L		D6
+			MOVE.B		(A2),D6
+			BEQ.S		@5
+
+;			Case 4: 0 < alpha < 255 and mask = 255
+
+			CMP.W		D5,D6
+			BNE.S		@4
+			MOVE.B		D2,(A2)
+			CLR.B		-1(A3)
+			BRA.S		@5
+
+;			Case 5: 0 < alpha < 255 and 0 < mask < 255
+
+@4			MULU.W		D2,D6
+			ADD.W		#128,D6
+			LSR.W		#8,D6
+			MOVE.B		D6,(A2)
+			SUB.B		D6,D2
+			NOT.B		D6
+			ASL.W		#8,D2
+			ADD.L		D2,D2
+			ADD.L		D6,D2
+			ADD.W		D6,D6
+			DIVU.W		D6,D2
+			BEQ.S		@4A
+			SUB.W		#1,D2
+@4A 		MOVE.B		D2,-1(A3)
+
+;			Move to next pixel
+
+@5			ADDA.W		#1,A2
+			DBF 		D1,@2
+			ADDA.W		D4,A0
+			ADDA.W		D7,A1
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3/D3-D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			SEG 		'ADoDraw'
+
+DoFadeMask	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoFadeMask (srcPtr: Ptr;
+;								  dstPtr: Ptr;
+;								  count: INTEGER;
+;								  drawings: INTEGER;
+;								  fadeout: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	18
+@dstPtr 	EQU 	14
+@count		EQU 	12
+@drawings	EQU 	10
+@fadeout	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	14
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+
+;			Compute scale factor
+
+			CLR.L		D1
+			MOVE.W		@drawings(A6),D1
+			SWAP		D1
+			DIVU.W		@fadeout(A6),D1
+			NOT.W		D1
+
+;			Loop through data
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+@1			CLR.W		D2
+			MOVE.B		(A0)+,D2
+			MULU.W		D1,D2
+			SWAP		D2
+			MOVE.B		D2,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoDraw'
+
+DoThresholdMask 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoThresholdMask (srcPtr: Ptr;
+;									   dstPtr: Ptr;
+;									   count: INTEGER;
+;									   pressure: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	16
+@dstPtr 	EQU 	12
+@count		EQU 	10
+@pressure	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	12
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+
+;			Loop through data
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+			MOVE.W		@pressure(A6),D1
+			NOT.B		D1
+
+@1			CMP.B		(A0)+,D1
+			SLS 		(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoDraw'
+
+DoNarrowMask	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoNarrowMask (srcPtr: Ptr;
+;									dstPtr: Ptr;
+;									count: INTEGER;
+;									pressure: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	16
+@dstPtr 	EQU 	12
+@count		EQU 	10
+@pressure	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	12
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+
+;			Loop through data
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+			MOVE.W		@pressure(A6),D1
+			NOT.B		D1
+
+@1			MOVE.B		(A0)+,D2
+			SUB.B		D1,D2
+			BCC.S		@2
+			CLR.B		D2
+@2			MOVE.B		D2,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			SEG 		'ADoDraw'
+
+DoGetTip	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoGetTip (dataPtr: Ptr;
+;								buffPtr: Ptr;
+;								dataWidth: INTEGER;
+;								buffWidth: INTEGER;
+;								rows: INTEGER;
+;								cols: INTEGER);
+;
+;			Parameter Offsets
+
+@dataPtr	EQU 	20
+@buffPtr	EQU 	16
+@dataWidth	EQU 	14
+@buffWidth	EQU 	12
+@rows		EQU 	10
+@cols		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	16
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@dataPtr(A6),A0
+			MOVE.L		@buffPtr(A6),A1
+
+;			Loop through rows and columns
+
+			MOVE.W		@rows(A6),D0
+			SUB.W		#1,D0
+			SUB.W		#1,@cols(A6)
+
+@1			MOVE.L		A0,A2
+			MOVE.L		A1,A3
+			MOVE.W		@cols(A6),D1
+
+;			Copy value
+
+@2			MOVE.B		(A2)+,(A3)+
+
+;			Move to next pixel
+
+			DBF 		D1,@2
+			ADDA.W		@dataWidth(A6),A0
+			ADDA.W		@buffWidth(A6),A1
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoDraw'
+
+DoGetBlurred	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoGetBlurred (dataPtr: Ptr;
+;									buffPtr: Ptr;
+;									dataWidth: INTEGER;
+;									buffWidth: INTEGER;
+;									rows: INTEGER;
+;									cols: INTEGER);
+;
+;			Parameter Offsets
+
+@dataPtr	EQU 	20
+@buffPtr	EQU 	16
+@dataWidth	EQU 	14
+@buffWidth	EQU 	12
+@rows		EQU 	10
+@cols		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	16
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3/D3-D5,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@dataPtr(A6),A0
+			MOVE.L		@buffPtr(A6),A1
+
+;			D2 and D3 are next and previous row offsets
+
+			MOVE.W		@dataWidth(A6),D2
+			MOVE.W		D2,D3
+			NEG.W		D3
+
+;			D4 & D5 will hold byte values
+
+			CLR.W		D4
+			CLR.W		D5
+
+;			Loop through rows and columns
+
+			MOVE.W		@rows(A6),D0
+			SUB.W		#1,D0
+			SUB.W		#1,@cols(A6)
+
+@1			MOVE.L		A0,A2
+			MOVE.L		A1,A3
+			MOVE.W		@cols(A6),D1
+
+;			Compute blurred value
+
+@2			MOVE.B		(A2)+,D4
+			ADD.W		D4,D4
+			MOVE.B		-2(A2),D5
+			ADD.W		D5,D4
+			MOVE.B		(A2),D5
+			ADD.W		D5,D4
+			ADD.W		D4,D4
+
+			MOVE.B		-2(A2,D3.W),D5
+			ADD.W		D5,D4
+			MOVE.B		-1(A2,D3.W),D5
+			ADD.W		D5,D4
+			ADD.W		D5,D4
+			MOVE.B		(A2,D3.W),D5
+			ADD.W		D5,D4
+
+			MOVE.B		-2(A2,D2.W),D5
+			ADD.W		D5,D4
+			MOVE.B		-1(A2,D2.W),D5
+			ADD.W		D5,D4
+			ADD.W		D5,D4
+			MOVE.B		(A2,D2.W),D5
+			ADD.W		D5,D4
+
+			ADD.W		#8,D4
+			ASR.W		#4,D4
+
+			MOVE.B		D4,(A3)+
+
+;			Move to next pixel
+
+@4			DBF 		D1,@2
+			ADDA.W		D2,A0
+			ADDA.W		@buffWidth(A6),A1
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3/D3-D5
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoDraw'
+
+DoGetSharpened	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoGetSharpened (dataPtr: Ptr;
+;									  buffPtr: Ptr;
+;									  dataWidth: INTEGER;
+;									  buffWidth: INTEGER;
+;									  rows: INTEGER;
+;									  cols: INTEGER);
+;
+;			Parameter Offsets
+
+@dataPtr	EQU 	20
+@buffPtr	EQU 	16
+@dataWidth	EQU 	14
+@buffWidth	EQU 	12
+@rows		EQU 	10
+@cols		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	16
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3/D3-D6,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@dataPtr(A6),A0
+			MOVE.L		@buffPtr(A6),A1
+
+;			D2 and D3 are next and previous row offsets
+
+			MOVE.W		@dataWidth(A6),D2
+			MOVE.W		D2,D3
+			NEG.W		D3
+
+;			D6 contains the constant 255
+
+			MOVE.W		#255,D6
+
+;			Loop through rows and columns
+
+			MOVE.W		@rows(A6),D0
+			SUB.W		#1,D0
+			SUB.W		#1,@cols(A6)
+
+@1			MOVE.L		A0,A2
+			MOVE.L		A1,A3
+			MOVE.W		@cols(A6),D1
+
+;			Compute sharpened value
+
+@2			CLR.W		D4
+			MOVE.B		(A2)+,D4
+			MULU.W		#24,D4
+
+			CLR.W		D5
+			MOVE.B		-2(A2),D5
+			SUB.W		D5,D4
+
+			MOVE.B		(A2),D5
+			SUB.W		D5,D4
+
+			MOVE.B		-2(A2,D3.W),D5
+			SUB.W		D5,D4
+
+			MOVE.B		-1(A2,D3.W),D5
+			SUB.W		D5,D4
+
+			MOVE.B		(A2,D3.W),D5
+			SUB.W		D5,D4
+
+			MOVE.B		-2(A2,D2.W),D5
+			SUB.W		D5,D4
+
+			MOVE.B		-1(A2,D2.W),D5
+			SUB.W		D5,D4
+
+			MOVE.B		(A2,D2.W),D5
+			SUB.W		D5,D4
+
+			ADD.W		#7,D4
+			ASR.W		#4,D4
+
+			BPL.S		@3
+			CLR.W		D4
+@3			CMP.W		D6,D4
+			BLE.S		@3A
+			MOVE.W		D6,D4
+
+@3A 		MOVE.B		D4,(A3)+
+
+;			Move to next pixel
+
+@4			DBF 		D1,@2
+			ADDA.W		D2,A0
+			ADDA.W		@buffWidth(A6),A1
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3/D3-D6
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			SEG 		'ADoDraw'
+
+DoMixBytes	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoMixBytes (oldPtr: Ptr;
+;								  newPtr: Ptr;
+;								  mixMap: TLookUpTable;
+;								  count: INTEGER);
+;
+;			Parameter Offsets
+
+@oldPtr 	EQU 	18
+@newPtr 	EQU 	14
+@mixMap 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	14
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVE.L		A2,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@oldPtr(A6),A0
+			MOVE.L		@newPtr(A6),A1
+			MOVE.L		@mixMap(A6),A2
+
+;			Loop through bytes
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+			CLR.W		D1
+			CLR.W		D2
+
+@1			MOVE.B		(A0),D1
+			MOVE.B		(A1)+,D2
+			SUB.W		D1,D2
+			BMI.S		@2
+			ADD.B		(A2,D2.W),D1
+			BRA.S		@3
+@2			NEG.W		D2
+			SUB.B		(A2,D2.W),D1
+@3			MOVE.B		D1,(A0)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVE.L		(SP)+,A2
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			SEG 		'ADoDraw'
+
+DoDrawTip	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoDrawTip (dataPtr: Ptr;
+;								 maskPtr: Ptr;
+;								 buffPtr: Ptr;
+;								 dataWidth: INTEGER;
+;								 maskWidth: INTEGER;
+;								 rows: INTEGER;
+;								 cols: INTEGER);
+;
+;			Parameter Offsets
+
+@dataPtr	EQU 	24
+@maskPtr	EQU 	20
+@buffPtr	EQU 	16
+@dataWidth	EQU 	14
+@maskWidth	EQU 	12
+@rows		EQU 	10
+@cols		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	20
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A5/D3-D4,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@dataPtr(A6),A0
+			MOVE.L		@maskPtr(A6),A1
+			MOVE.L		@buffPtr(A6),A2
+
+;			D4 will hold byte values
+
+			CLR.W		D4
+
+;			Loop through rows and columns
+
+			MOVE.W		@rows(A6),D0
+			SUB.W		#1,D0
+			SUB.W		#1,@cols(A6)
+
+@1			MOVE.L		A0,A3
+			MOVE.L		A1,A4
+			MOVE.L		A2,A5
+			MOVE.W		@cols(A6),D1
+
+;			Get color value
+
+@2			CLR.W		D2
+			MOVE.B		(A5)+,D2
+
+;			Get mask value
+
+			CLR.W		D3
+			MOVE.B		(A4)+,D3
+
+;			If zero, leave pixel alone
+
+			BEQ.S		@4
+
+;			Compute delta
+
+			MOVE.B		(A3),D4
+			SUB.W		D4,D2
+
+;			Case on sign
+
+			BEQ.S		@4
+			BMI.S		@3
+
+;			Make lighter case
+
+			ADD.W		#1,D3
+			MULS.W		D3,D2
+			ADD.W		#128,D2
+			ASR.W		#8,D2
+			ADD.B		D2,(A3)
+			BRA.S		@4
+
+;			Make darker case
+
+@3			NEG.W		D2
+			ADD.W		#1,D3
+			MULS.W		D3,D2
+			ADD.W		#128,D2
+			ASR.W		#8,D2
+			SUB.B		D2,(A3)
+
+;			Move to next pixel
+
+@4			ADDA.W		#1,A3
+			DBF 		D1,@2
+			ADDA.W		@dataWidth(A6),A0
+			ADDA.W		@maskWidth(A6),A1
+			ADDA.W		@maskWidth(A6),A2
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A5/D3-D4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoDraw'
+
+DoDrawTipDarken 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoDrawTipDarken (dataPtr: Ptr;
+;									   maskPtr: Ptr;
+;									   buffPtr: Ptr;
+;									   dataWidth: INTEGER;
+;									   maskWidth: INTEGER;
+;									   rows: INTEGER;
+;									   cols: INTEGER);
+;
+;			Parameter Offsets
+
+@dataPtr	EQU 	24
+@maskPtr	EQU 	20
+@buffPtr	EQU 	16
+@dataWidth	EQU 	14
+@maskWidth	EQU 	12
+@rows		EQU 	10
+@cols		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	20
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A5/D3-D4,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@dataPtr(A6),A0
+			MOVE.L		@maskPtr(A6),A1
+			MOVE.L		@buffPtr(A6),A2
+
+;			D4 will hold byte values
+
+			CLR.W		D4
+
+;			Loop through rows and columns
+
+			MOVE.W		@rows(A6),D0
+			SUB.W		#1,D0
+			SUB.W		#1,@cols(A6)
+
+@1			MOVE.L		A0,A3
+			MOVE.L		A1,A4
+			MOVE.L		A2,A5
+			MOVE.W		@cols(A6),D1
+
+;			Get color value
+
+@2			CLR.W		D2
+			MOVE.B		(A5)+,D2
+
+;			Get mask value
+
+			CLR.W		D3
+			MOVE.B		(A4)+,D3
+
+;			If zero, leave pixel alone
+
+			BEQ.S		@4
+
+;			Compute delta
+
+			MOVE.B		(A3),D4
+			SUB.W		D4,D2
+
+;			Case on sign
+
+			BGE.S		@4
+
+;			Make darker case
+
+			NEG.W		D2
+			ADD.W		#1,D3
+			MULS.W		D3,D2
+			ADD.W		#128,D2
+			ASR.W		#8,D2
+			SUB.B		D2,(A3)
+
+;			Move to next pixel
+
+@4			ADDA.W		#1,A3
+			DBF 		D1,@2
+			ADDA.W		@dataWidth(A6),A0
+			ADDA.W		@maskWidth(A6),A1
+			ADDA.W		@maskWidth(A6),A2
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A5/D3-D4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoDraw'
+
+DoDrawTipLighten	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoDrawTipLighten (dataPtr: Ptr;
+;										maskPtr: Ptr;
+;										buffPtr: Ptr;
+;										dataWidth: INTEGER;
+;										maskWidth: INTEGER;
+;										rows: INTEGER;
+;										cols: INTEGER);
+;
+;			Parameter Offsets
+
+@dataPtr	EQU 	24
+@maskPtr	EQU 	20
+@buffPtr	EQU 	16
+@dataWidth	EQU 	14
+@maskWidth	EQU 	12
+@rows		EQU 	10
+@cols		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	20
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A5/D3-D4,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@dataPtr(A6),A0
+			MOVE.L		@maskPtr(A6),A1
+			MOVE.L		@buffPtr(A6),A2
+
+;			D4 will hold byte values
+
+			CLR.W		D4
+
+;			Loop through rows and columns
+
+			MOVE.W		@rows(A6),D0
+			SUB.W		#1,D0
+			SUB.W		#1,@cols(A6)
+
+@1			MOVE.L		A0,A3
+			MOVE.L		A1,A4
+			MOVE.L		A2,A5
+			MOVE.W		@cols(A6),D1
+
+;			Get color value
+
+@2			CLR.W		D2
+			MOVE.B		(A5)+,D2
+
+;			Get mask value
+
+			CLR.W		D3
+			MOVE.B		(A4)+,D3
+
+;			If zero, leave pixel alone
+
+			BEQ.S		@4
+
+;			Compute delta
+
+			MOVE.B		(A3),D4
+			SUB.W		D4,D2
+
+;			Case on sign
+
+			BLE.S		@4
+
+;			Make lighter case
+
+			ADD.W		#1,D3
+			MULS.W		D3,D2
+			ADD.W		#128,D2
+			ASR.W		#8,D2
+			ADD.B		D2,(A3)
+
+;			Move to next pixel
+
+@4			ADDA.W		#1,A3
+			DBF 		D1,@2
+			ADDA.W		@dataWidth(A6),A0
+			ADDA.W		@maskWidth(A6),A1
+			ADDA.W		@maskWidth(A6),A2
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A5/D3-D4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoDraw'
+
+DoDrawTipColor	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoDrawTipColor (grayLUT: TRGBLookUpTable;
+;									  rDataPtr: Ptr;
+;									  gDataPtr: Ptr;
+;									  bDataPtr: Ptr;
+;									  maskPtr: Ptr;
+;									  rBuffPtr: Ptr;
+;									  gBuffPtr: Ptr;
+;									  bBuffPtr: Ptr;
+;									  dataWidth: INTEGER;
+;									  maskWidth: INTEGER;
+;									  rows: INTEGER;
+;									  cols: INTEGER);
+;
+;			Parameter Offsets
+
+@grayLUT	EQU 	44
+@rDataPtr	EQU 	40
+@gDataPtr	EQU 	36
+@bDataPtr	EQU 	32
+@maskPtr	EQU 	28
+@rBuffPtr	EQU 	24
+@gBuffPtr	EQU 	20
+@bBuffPtr	EQU 	16
+@dataWidth	EQU 	14
+@maskWidth	EQU 	12
+@rows		EQU 	10
+@cols		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	40
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A5/D3-D7,-(SP)
+
+;			Unload image & mask addresses
+
+			MOVE.L		@rDataPtr(A6),A0
+			MOVE.L		@gDataPtr(A6),A1
+			MOVE.L		@bDataPtr(A6),A2
+			MOVE.L		@maskPtr(A6),A3
+			MOVE.L		@grayLUT(A6),A4
+
+;			Initialize high order bytes of word registers
+
+			CLR.W		D2
+			CLR.W		D3
+			CLR.W		D4
+			CLR.W		D7
+
+;			Loop through rows and columns
+
+			MOVE.W		@rows(A6),D0
+			SUB.W		#1,D0
+@1			MOVE.W		@cols(A6),D1
+			SUB.W		#1,D1
+
+;			Load mask value into D5
+
+@2			CLR.W		D5
+			MOVE.B		(A3)+,D5
+			BNE.S		@3
+			ADDA.W		#1,A0
+			ADDA.W		#1,A1
+			ADDA.W		#1,A2
+			BRA 		@15
+@3			ADD.W		#1,D5
+
+;			Compute red delta
+
+			MOVE.L		@rBuffPtr(A6),A5
+			MOVE.B		(A5),D2
+			MOVE.B		(A0),D3
+			MOVE.B		(A4,D3.W),D7
+			SUB.W		D3,D2
+			BEQ.S		@9
+
+;			Scale by weight
+
+			MULS.W		D5,D2
+			ADD.W		#128,D2
+			LSR.W		#8,D2
+			ADD.B		D2,(A0)
+
+;			Compute green delta
+
+@9			MOVE.L		@gBuffPtr(A6),A5
+			MOVE.B		(A5),D2
+			MOVE.B		(A1),D3
+			ADDA.W		#256,A4
+			ADD.B		(A4,D3.W),D7
+			SUB.W		D3,D2
+			BEQ.S		@10
+
+;			Scale by weight
+
+			MULS.W		D5,D2
+			ADD.W		#128,D2
+			LSR.W		#8,D2
+			ADD.B		D2,(A1)
+
+;			Compute blue delta
+
+@10 		MOVE.L		@bBuffPtr(A6),A5
+			MOVE.B		(A5),D2
+			MOVE.B		(A2),D3
+			ADDA.W		#256,A4
+			ADD.B		(A4,D3.W),D7
+			SUB.W		D3,D2
+			BEQ.S		@11
+
+;			Scale by weight
+
+			MULS.W		D5,D2
+			ADD.W		#128,D2
+			LSR.W		#8,D2
+			ADD.B		D2,(A2)
+
+;			Compute new luminosity value
+
+@11 		MOVE.B		(A0),D2
+			MOVE.B		(A1),D3
+			MOVE.B		(A2),D4
+			CLR.W		D6
+			MOVE.B		(A4,D4.W),D6
+			SUBA.W		#256,A4
+			ADD.B		(A4,D3.W),D6
+			SUBA.W		#256,A4
+			ADD.B		(A4,D2.W),D6
+
+;			If equal to zero, set output to gray
+
+			BEQ.S		@11A
+
+;			If old luminosity is 255, set output to white
+
+			CMP.W		#255,D7
+			BNE.S		@12
+@11A		MOVE.B		D7,(A0)+
+			MOVE.B		D7,(A1)+
+			MOVE.B		D7,(A2)+
+			BRA.S		@15
+
+;			If lumonisities are equal, no need to scale
+
+@12 		CMP.W		D6,D7
+			BEQ.S		@14
+
+;			Else scale to match old lumonisity
+
+			MOVE.W		D6,D5
+			LSR.W		#1,D5
+			MULU.W		D7,D2
+			ADD.W		D5,D2
+			DIVU.W		D6,D2
+			MULU.W		D7,D3
+			ADD.W		D5,D3
+			DIVU.W		D6,D3
+			MULU.W		D7,D4
+			ADD.W		D5,D4
+			DIVU.W		D6,D4
+
+;			Find maximum value
+
+			MOVE.W		D2,D5
+			CMP.W		D3,D5
+			BGE.S		@12A
+			MOVE.W		D3,D5
+@12A		CMP.W		D4,D5
+			BGE.S		@12B
+			MOVE.W		D4,D5
+
+;			If less than or equal to 255, we are done
+
+@12B		CMP.W		#255,D5
+			BLE.S		@14
+
+;			Else rescale values
+
+			SUB.W		D7,D5
+			NOT.B		D7
+			MOVE.W		D5,D6
+			LSR.W		#1,D6
+			EXT.L		D6
+			MULU.W		D7,D2
+			ADD.L		D6,D2
+			DIVU.W		D5,D2
+			MULU.W		D7,D3
+			ADD.L		D6,D3
+			DIVU.W		D5,D3
+			MULU.W		D7,D4
+			ADD.L		D6,D4
+			DIVU.W		D5,D4
+
+;			Find new maximum value
+
+			MOVE.W		D2,D5
+			CMP.W		D3,D5
+			BGE.S		@12C
+			MOVE.W		D3,D5
+@12C		CMP.W		D4,D5
+			BGE.S		@12D
+			MOVE.W		D4,D5
+
+;			Add in gray to make maximum 255
+
+@12D		NOT.B		D5
+			ADD.B		D5,D2
+			ADD.B		D5,D3
+			ADD.B		D5,D4
+
+;			Save new value
+
+@14 		MOVE.B		D2,(A0)+
+			MOVE.B		D3,(A1)+
+			MOVE.B		D4,(A2)+
+
+;			Move to next pixel in column
+
+@15 		ADD.L		#1,@rBuffPtr(A6)
+			ADD.L		#1,@gBuffPtr(A6)
+			ADD.L		#1,@bBuffPtr(A6)
+			DBF 		D1,@2
+
+;			Move to next row
+
+			MOVE.W		@dataWidth(A6),D2
+			SUB.W		@cols(A6),D2
+			ADDA.W		D2,A0
+			ADDA.W		D2,A1
+			ADDA.W		D2,A2
+			MOVE.W		@maskWidth(A6),D2
+			SUB.W		@cols(A6),D2
+			EXT.L		D2
+			ADDA.W		D2,A3
+			ADD.L		D2,@rBuffPtr(A6)
+			ADD.L		D2,@gBuffPtr(A6)
+			ADD.L		D2,@bBuffPtr(A6)
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A5/D3-D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoDraw'
+
+MakeTextureNoise	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE MakeTextureNoise (noisePtr: Ptr;
+;										count: INTEGER);
+;
+;			Parameter Offsets
+
+@noisePtr	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	6
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D6-D7/A4,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@noisePtr(A6),A4
+			MOVE.W		@count(A6),D7
+			SUB.W		#1,D7
+
+;			Compute noise
+
+@1			CLR.W		-(SP)
+			_Random
+			MOVE.W		(SP)+,D6
+			MOVE.B		D6,(A4)+
+			DBF 		D7,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D6-D7/A4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 	'ADoDraw'
+
+ScrambleTexture 	PROC	EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE ScrambleTexture (dataPtr: Ptr;
+;									   noisePtr: Ptr);
+;
+;			Parameter Offsets
+
+@dataPtr	EQU 	12
+@noisePtr	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	8
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Unload parameters
+
+			MOVE.L		@dataPtr(A6),A0
+			MOVE.L		@noisePtr(A6),A1
+
+;			Scramble the texture
+
+			MOVE.W		#255,D0
+			CLR.W		D1
+@1			MOVE.B		(A1)+,D1
+			MOVE.B		(A0,D1.W),D2
+			MOVE.B		(A0,D0.W),(A0,D1.W)
+			MOVE.B		D2,(A0,D0.W)
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoDraw'
+
+DoCopyForward	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoCopyForward (srcPtr: Ptr;
+;									 dstPtr: Ptr;
+;									 count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	14
+@dstPtr 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	10
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Unload parameters
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Move the bytes
+
+@1			MOVE.B		(A0)+,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoDraw'
+
+DoCopyBackward	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoCopyBackward (srcPtr: Ptr;
+;									  dstPtr: Ptr;
+;									  count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	14
+@dstPtr 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	10
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Unload parameters
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Move the bytes
+
+@1			MOVE.B		-(A0),-(A1)
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			END

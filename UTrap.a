@@ -1,0 +1,255 @@
+;Photoshop version 1.0.1, file: UTrap.a
+;  Computer History Museum, www.computerhistory.org
+;  This material is (C)Copyright 1990 Adobe Systems Inc.
+;  It may not be distributed to third parties.
+;  It is licensed for non-commercial use according to 
+;  www.computerhistory.org/softwarelicense/photoshop/ 
+
+			INCLUDE 	'Traps.a'
+
+; **********************************************************************
+
+			SEG 		'ATrap'
+
+DoTrapRow	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoTrapRow (srcPtr1: Ptr;
+;								 srcPtr2: Ptr;
+;								 dstPtr: Ptr;
+;								 bufPtr1: Ptr;
+;								 bufPtr2: Ptr;
+;								 radius: INTEGER;
+;								 count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr1	EQU 	28
+@srcPtr2	EQU 	24
+@dstPtr 	EQU 	20
+@bufPtr1	EQU 	16
+@bufPtr2	EQU 	12
+@radius 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	24
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D2-D3/A2-A4,-(SP)
+
+;			Limit radius to count - 1
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+			CMP.W		@radius(A6),D0
+			BGE.S		@1
+			MOVE.W		D0,@radius(A6)
+
+;			If radius is zero, nothing to do
+
+@1			TST.W		@radius(A6)
+			BEQ 		@exit
+
+;			Shrink first source row
+
+			MOVE.L		@bufPtr1(A6),A0
+			ADDA.W		@radius(A6),A0
+			MOVE.L		@srcPtr1(A6),A1
+			MOVE.W		@count(A6),D0
+			SUB.W		@radius(A6),D0
+			SUB.W		#1,D0
+			MOVE.W		@radius(A6),D1
+			SUB.W		#1,D1
+@2			MOVE.W		D1,D2
+			MOVE.B		(A1)+,D3
+			MOVE.L		A1,A2
+@3			CMP.B		(A2)+,D3
+			DBLO		D2,@3
+			BHS.S		@4
+			MOVE.B		-1(A2),D3
+			DBF 		D2,@3
+@4			MOVE.B		D3,(A0)+
+			DBF 		D0,@2
+
+;			Repeat last value radius times
+
+			MOVE.W		D1,D0
+@5			MOVE.B		D3,(A0)+
+			DBF 		D0,@5
+
+;			Repeat first value radius times
+
+			MOVE.L		@bufPtr1(A6),A0
+			MOVE.L		A0,A1
+			ADDA.W		@radius(A6),A1
+			MOVE.B		(A1),D3
+@6			MOVE.B		D3,(A0)+
+			DBF 		D1,@6
+
+;			Spread second source row
+
+			MOVE.L		@bufPtr2(A6),A0
+			ADDA.W		@radius(A6),A0
+			MOVE.L		@srcPtr2(A6),A1
+			MOVE.W		@count(A6),D0
+			SUB.W		@radius(A6),D0
+			SUB.W		#1,D0
+			MOVE.W		@radius(A6),D1
+			SUB.W		#1,D1
+@7			MOVE.W		D1,D2
+			MOVE.B		(A1)+,D3
+			MOVE.L		A1,A2
+@8			CMP.B		(A2)+,D3
+			DBHI		D2,@8
+			BLS.S		@9
+			MOVE.B		-1(A2),D3
+			DBF 		D2,@8
+@9			MOVE.B		D3,(A0)+
+			DBF 		D0,@7
+
+;			Repeat last value radius times
+
+			MOVE.W		D1,D0
+@10 		MOVE.B		D3,(A0)+
+			DBF 		D0,@10
+
+;			Repeat first value radius times
+
+			MOVE.L		@bufPtr2(A6),A0
+			MOVE.L		A0,A1
+			ADDA.W		@radius(A6),A1
+			MOVE.B		(A1),D3
+@11 		MOVE.B		D3,(A0)+
+			DBF 		D1,@11
+
+;			Perform backward looking pass
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+			MOVE.L		@srcPtr1(A6),A0
+			MOVE.L		@srcPtr2(A6),A1
+			MOVE.L		@dstPtr(A6),A2
+
+			MOVE.L		@bufPtr1(A6),A3
+			MOVE.L		@bufPtr2(A6),A4
+
+@12 		MOVE.B		(A3)+,D1
+			SUB.B		(A0)+,D1
+			MOVE.B		(A1)+,D2
+			SUB.B		(A4)+,D2
+			CMP.B		D2,D1
+			BLS.S		@13
+			MOVE.B		D2,D1
+@13 		CMP.B		(A2)+,D1
+			BLS.S		@14
+			MOVE.B		D1,-1(A2)
+@14 		DBF 		D0,@12
+
+;			Perform forward looking pass
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+			MOVE.L		@srcPtr1(A6),A0
+			MOVE.L		@srcPtr2(A6),A1
+			MOVE.L		@dstPtr(A6),A2
+
+			MOVE.L		@bufPtr1(A6),A3
+			ADDA.W		@radius(A6),A3
+			MOVE.L		@bufPtr2(A6),A4
+			ADDA.W		@radius(A6),A4
+
+@15 		MOVE.B		(A3)+,D1
+			SUB.B		(A0)+,D1
+			MOVE.B		(A1)+,D2
+			SUB.B		(A4)+,D2
+			CMP.B		D2,D1
+			BLS.S		@16
+			MOVE.B		D2,D1
+@16 		CMP.B		(A2)+,D1
+			BLS.S		@17
+			MOVE.B		D1,-1(A2)
+@17 		DBF 		D0,@15
+
+;			Clean up and exit
+
+@exit		MOVEM.L 	(SP)+,D2-D3/A2-A4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ATrap'
+
+DoCombineTrap	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoCombineTrap (srcPtr: Ptr;
+;									 dstPtr: Ptr;
+;									 median: INTEGER;
+;									 count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	16
+@dstPtr 	EQU 	12
+@median 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	12
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D2-D4,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.W		@median(A6),D0
+			MOVE.W		@count(A6),D1
+			SUB.W		#1,D1
+
+;			Initialize registers
+
+			CLR.W		D2
+			CLR.W		D3
+			MOVE.W		#255,D4
+
+;			Process a pixel
+
+@1			MOVE.B		(A0)+,D2
+			MOVE.B		(A1),D3
+			ADD.W		D0,D2
+			SUB.W		D3,D2
+			BPL.S		@2
+			CLR.W		D2
+@2			CMP.W		D4,D2
+			BLE.S		@3
+			MOVE.W		D4,D2
+@3			MOVE.B		D2,(A1)+
+			DBF 		D1,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D2-D4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			END

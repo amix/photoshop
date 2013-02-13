@@ -1,0 +1,2659 @@
+;Photoshop version 1.0.1, file: UFilters.a
+;  Computer History Museum, www.computerhistory.org
+;  This material is (C)Copyright 1990 Adobe Systems Inc.
+;  It may not be distributed to third parties.
+;  It is licensed for non-commercial use according to 
+;  www.computerhistory.org/softwarelicense/photoshop/ 
+
+			INCLUDE 	'Traps.a'
+
+; **********************************************************************
+
+				SEG 		'ADoCommand'
+
+UpdateTotals	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE UpdateTotals (buffPtr: Ptr;
+;									dataPtr: Ptr;
+;									count: INTEGER;
+;									radius: INTEGER;
+;									add: BOOLEAN);
+;
+;			Parameter Offsets
+
+@buffPtr	EQU 	18
+@dataPtr	EQU 	14
+@count		EQU 	12
+@radius 	EQU 	10
+@add		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	14
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Unload addresses
+
+			MOVE.L		@buffPtr(A6),A0
+			MOVE.L		@dataPtr(A6),A1
+
+;			Use first pixel radius times
+
+			MOVE.W		@radius(A6),D0
+			SUB.W		#1,D0
+			CLR.W		D1
+			MOVE.B		(A1),D1
+			TST.B		@add(A6)
+			BNE.S		@1
+			NEG.W		D1
+@1			ADD.W		D1,(A0)+
+			DBF 		D0,@1
+
+;			Now use count pixels
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+			CLR.W		D1
+			TST.B		@add(A6)
+			BEQ.S		@3
+
+@2			MOVE.B		(A1)+,D1
+			ADD.W		D1,(A0)+
+			DBF 		D0,@2
+			BRA.S		@4
+
+@3			MOVE.B		(A1)+,D1
+			SUB.W		D1,(A0)+
+			DBF 		D0,@3
+
+;			Use last pixel radius times
+
+@4			MOVE.W		@radius(A6),D0
+			SUB.W		#1,D0
+			TST.B		@add(A6)
+			BNE.S		@5
+			NEG.W		D1
+@5			ADD.W		D1,(A0)+
+			DBF 		D0,@5
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoCommand'
+
+DoBoxFilter 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoBoxFilter (buffPtr: Ptr;
+;								   dataPtr: Ptr;
+;								   radius: INTEGER;
+;								   count: INTEGER);
+;
+;			Parameter Offsets
+
+@buffPtr	EQU 	16
+@dataPtr	EQU 	12
+@radius 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	12
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2/D3-D4,-(SP)
+
+;			Unload address
+
+			MOVE.L		@buffPtr(A6),A0
+			MOVE.L		A0,A1
+			MOVE.L		@dataPtr(A6),A2
+
+;			D0 = area of box
+
+			MOVE.W		@radius(A6),D0
+			ASL.W		#1,D0
+			ADD.W		#1,D0
+			MULU.W		D0,D0
+
+;			Compute initial total
+
+			MOVE.L		D0,D1
+			ASR.L		#1,D1
+			MOVE.W		@radius(A6),D2
+			ASL.W		#1,D2
+			SUB.W		#1,D2
+			CLR.L		D3
+@1			MOVE.W		(A0)+,D3
+			ADD.L		D3,D1
+			DBF 		D2,@1
+
+;			Initialize loop
+
+			MOVE.W		@count(A6),D2
+			SUB.W		#1,D2
+
+;			Add in leading total
+
+@2			MOVE.W		(A0)+,D3
+			ADD.L		D3,D1
+
+;			Compute output value
+
+			MOVE.L		D1,D4
+			DIVU.W		D0,D4
+			MOVE.B		D4,(A2)+
+
+;			Subtract trailing total
+
+			MOVE.W		(A1)+,D3
+			SUB.L		D3,D1
+
+;			Move to next pixel
+
+			DBF 		D2,@2
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2/D3-D4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoCommand'
+
+DoWeightedFilter	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoWeightedFilter (srcPtr: Ptr;
+;										dstPtr: Ptr;
+;										step: INTEGER;
+;										count: INTEGER;
+;										radius: INTEGER;
+;										weights: Ptr);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	22
+@dstPtr 	EQU 	18
+@step		EQU 	16
+@count		EQU 	14
+@radius 	EQU 	12
+@weights	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A4/D3-D5,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.L		@weights(A6),A2
+
+			MOVE.W		@step(A6),D0
+
+			MOVE.W		@count(A6),D1
+			SUB.W		#1,D1
+
+			MOVE.W		@radius(A6),D2
+			ASL.W		#1,D2
+
+;			Compute weighted average
+
+@1			MOVE.L		A0,A3
+			ADDA.W		#1,A0
+			MOVE.L		A2,A4
+			MOVE.W		D2,D3
+			MOVE.L		#$8000,D4
+
+@2			CLR.W		D5
+			MOVE.B		(A3),D5
+			ADDA.W		D0,A3
+			MULU.W		(A4)+,D5
+			ADD.L		D5,D4
+			DBF 		D3,@2
+
+			SWAP		D4
+			MOVE.B		D4,(A1)+
+			DBF 		D1,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A4/D3-D5
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			SEG 		'ADoFilter'
+
+SobelLine	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE SobelLine (prevPtr: Ptr;
+;								 thisPtr: Ptr;
+;								 nextPtr: Ptr;
+;								 destPtr: Ptr;
+;								 count: INTEGER;
+;								 atStart: BOOLEAN;
+;								 atEnd: BOOLEAN);
+;
+;			Parameter Offsets
+
+@prevPtr	EQU 	26
+@thisPtr	EQU 	22
+@nextPtr	EQU 	18
+@destPtr	EQU 	14
+@count		EQU 	12
+@atStart	EQU 	10
+@atEnd		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	22
+
+;			Local variables
+
+@p1 		EQU 	-2
+@p2 		EQU 	-4
+@p3 		EQU 	-6
+@p4 		EQU 	-8
+@p5 		EQU 	-10
+@p6 		EQU 	-12
+@p7 		EQU 	-14
+@p8 		EQU 	-16
+@p9 		EQU 	-18
+
+;			Size of local variables
+
+@localVars	EQU 	-18
+
+;			Save registers
+
+			LINK		A6,#@localVars
+			MOVEM.L 	A2-A4,-(SP)
+
+;			Unload pointers
+
+			MOVE.L		@prevPtr(A6),A0
+			MOVE.L		@thisPtr(A6),A1
+			MOVE.L		@nextPtr(A6),A2
+			MOVE.L		@destPtr(A6),A3
+
+;			Load hypot table
+
+			LEA 		@table,A4
+
+;			Initialize local variables
+
+			CLR.W		@p1(A6)
+			CLR.W		@p2(A6)
+			CLR.W		@p3(A6)
+			CLR.W		@p4(A6)
+			CLR.W		@p5(A6)
+			CLR.W		@p6(A6)
+			CLR.W		@p7(A6)
+			CLR.W		@p8(A6)
+			CLR.W		@p9(A6)
+
+;			Initialize loop
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Copy pixel values to local variables
+
+@1			MOVE.B		-1(A0),@p1+1(A6)
+			MOVE.B		(A0)+,@p2+1(A6)
+			MOVE.B		(A0),@p3+1(A6)
+			MOVE.B		-1(A1),@p4+1(A6)
+			MOVE.B		(A1)+,@p5+1(A6)
+			MOVE.B		(A1),@p6+1(A6)
+			MOVE.B		-1(A2),@p7+1(A6)
+			MOVE.B		(A2)+,@p8+1(A6)
+			MOVE.B		(A2),@p9+1(A6)
+
+;			If at start, copy center column to first column
+
+			TST.B		@atStart(A6)
+			BEQ.S		@2
+			CLR.B		@atStart(A6)
+			MOVE.W		@p2(A6),@p1(A6)
+			MOVE.W		@p5(A6),@p4(A6)
+			MOVE.W		@p8(A6),@p7(A6)
+
+;			If at end, copy center column to last column
+
+@2			TST.W		D0
+			BNE.S		@3
+			TST.B		@atEnd(A6)
+			BEQ.S		@3
+			MOVE.W		@p2(A6),@p3(A6)
+			MOVE.W		@p5(A6),@p6(A6)
+			MOVE.W		@p8(A6),@p9(A6)
+
+;			Compute x
+
+@3			MOVE.W		@p3(A6),D1
+			ADD.W		@p6(A6),D1
+			ADD.W		@p6(A6),D1
+			ADD.W		@p9(A6),D1
+			SUB.W		@p1(A6),D1
+			SUB.W		@p4(A6),D1
+			SUB.W		@p4(A6),D1
+			SUB.W		@p7(A6),D1
+
+;			Compute abs value
+
+			BPL.S		@4
+			NEG.W		D1
+
+;			Compute y
+
+@4			MOVE.W		@p1(A6),D2
+			ADD.W		@p2(A6),D2
+			ADD.W		@p2(A6),D2
+			ADD.W		@p3(A6),D2
+			SUB.W		@p7(A6),D2
+			SUB.W		@p8(A6),D2
+			SUB.W		@p8(A6),D2
+			SUB.W		@p9(A6),D2
+
+;			Compute abs value
+
+			BPL.S		@5
+			NEG.W		D2
+
+;			Make D2 the larger
+
+@5			CMP.W		D1,D2
+			BGE.S		@6
+			EXG 		D1,D2
+
+;			Make sure both are not zero
+
+@6			TST.W		D2
+			BEQ.S		@7
+
+;			Compute table index
+
+			EXT.L		D1
+			LSL.L		#8,D1
+			DIVU.W		D2,D1
+
+;			Scale by table value
+
+			LSL.W		#1,D1
+			MULU.W		(A4,D1.W),D2
+			LSL.L		#2,D2
+			SWAP		D2
+
+;			Truncate to 255
+
+			CMP.W		#255,D2
+			BLE.S		@7
+			MOVE.L		#-1,D2
+
+;			Store and move to next pixel
+
+@7			MOVE.B		D2,(A3)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+;			Hypotenuse Table
+
+@table		DC.W		16384,16384,16384,16385,16386,16387,16388,16390
+			DC.W		16392,16394,16396,16399,16402,16405,16408,16412
+			DC.W		16416,16420,16424,16429,16434,16439,16444,16450
+			DC.W		16456,16462,16468,16475,16482,16489,16496,16504
+			DC.W		16512,16520,16528,16536,16545,16554,16564,16573
+			DC.W		16583,16593,16603,16614,16624,16635,16646,16658
+			DC.W		16670,16681,16694,16706,16719,16731,16745,16758
+			DC.W		16771,16785,16799,16813,16828,16843,16858,16873
+			DC.W		16888,16904,16920,16936,16952,16969,16985,17002
+			DC.W		17020,17037,17055,17073,17091,17109,17128,17146
+			DC.W		17165,17185,17204,17224,17243,17264,17284,17304
+			DC.W		17325,17346,17367,17388,17410,17432,17454,17476
+			DC.W		17498,17521,17543,17566,17590,17613,17637,17660
+			DC.W		17684,17709,17733,17758,17782,17807,17832,17858
+			DC.W		17883,17909,17935,17961,17988,18014,18041,18068
+			DC.W		18095,18122,18149,18177,18205,18233,18261,18289
+			DC.W		18318,18347,18375,18405,18434,18463,18493,18523
+			DC.W		18552,18583,18613,18643,18674,18705,18736,18767
+			DC.W		18798,18830,18861,18893,18925,18957,18989,19022
+			DC.W		19054,19087,19120,19153,19186,19220,19253,19287
+			DC.W		19321,19355,19389,19423,19458,19492,19527,19562
+			DC.W		19597,19632,19667,19703,19739,19774,19810,19846
+			DC.W		19882,19919,19955,19992,20029,20066,20103,20140
+			DC.W		20177,20214,20252,20290,20327,20365,20403,20442
+			DC.W		20480,20518,20557,20596,20635,20674,20713,20752
+			DC.W		20791,20831,20870,20910,20950,20990,21030,21070
+			DC.W		21110,21151,21191,21232,21273,21314,21355,21396
+			DC.W		21437,21478,21520,21561,21603,21645,21686,21728
+			DC.W		21771,21813,21855,21897,21940,21983,22025,22068
+			DC.W		22111,22154,22197,22240,22284,22327,22371,22414
+			DC.W		22458,22502,22546,22590,22634,22678,22722,22767
+			DC.W		22811,22856,22901,22945,22990,23035,23080,23125
+			DC.W		23170
+
+; **********************************************************************
+
+				SEG 		'ADoCommand'
+
+MinOrMaxRow 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE MinOrMaxRow (srcPtr: Ptr;
+;								   dstPtr: Ptr;
+;								   count: INTEGER;
+;								   maxFlag: BOOLEAN);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	16
+@dstPtr 	EQU 	12
+@count		EQU 	10
+@maxFlag	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	12
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVE.L		D3,-(SP)
+
+;			Unload pointers
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+
+;			Initial 3 pixel wide buffer
+
+			MOVE.B		(A0)+,D3
+			MOVE.B		D3,D2
+
+;			Loop through all except last
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#2,D0
+
+;			If only 1 pixel wide, just copy it
+
+			BPL.S		@1
+			MOVE.B		D2,(A1)
+			BRA.S		@exit
+
+;			Decide which loop to use
+
+@1			TST.B		@maxFlag(A6)
+			BNE.S		@6
+
+;			Minimum value loop
+
+@2			MOVE.B		D2,D1
+			MOVE.B		D3,D2
+			MOVE.B		(A0)+,D3
+			CMP.B		D2,D1
+			BLS.S		@3
+			MOVE.B		D2,D1
+@3			CMP.B		D3,D1
+			BLS.S		@4
+			MOVE.B		D3,D1
+@4			MOVE.B		D1,(A1)+
+			DBF 		D0,@2
+
+			CMP.B		D3,D2
+			BLS.S		@5
+			MOVE.B		D3,D2
+@5			MOVE.B		D2,(A1)
+			BRA.S		@exit
+
+;			Maximum value loop
+
+@6			MOVE.B		D2,D1
+			MOVE.B		D3,D2
+			MOVE.B		(A0)+,D3
+			CMP.B		D2,D1
+			BHS.S		@7
+			MOVE.B		D2,D1
+@7			CMP.B		D3,D1
+			BHS.S		@8
+			MOVE.B		D3,D1
+@8			MOVE.B		D1,(A1)+
+			DBF 		D0,@6
+
+			CMP.B		D3,D2
+			BHS.S		@9
+			MOVE.B		D3,D2
+@9			MOVE.B		D2,(A1)
+
+;			Clean up and exit
+
+@exit		MOVE.L		(SP)+,D3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoCommand'
+
+MinOrMaxRows	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE MinOrMaxRows (prevPtr: Ptr;
+;									thisPtr: Ptr;
+;									nextPtr: Ptr;
+;									destPtr: Ptr;
+;									count: INTEGER;
+;									maxFlag: BOOLEAN);
+;
+;			Parameter Offsets
+
+@prevPtr	EQU 	24
+@thisPtr	EQU 	20
+@nextPtr	EQU 	16
+@destPtr	EQU 	12
+@count		EQU 	10
+@maxFlag	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	20
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3,-(SP)
+
+;			Unload pointers
+
+			MOVE.L		@prevPtr(A6),A0
+			MOVE.L		@thisPtr(A6),A1
+			MOVE.L		@nextPtr(A6),A2
+			MOVE.L		@destPtr(A6),A3
+
+;			Initialize loop
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Decide which loop to use
+
+			TST.B		@maxFlag(A6)
+			BNE.S		@4
+
+;			Minimum value loop
+
+@1			MOVE.B		(A0)+,D1
+			MOVE.B		(A1)+,D2
+			CMP.B		D2,D1
+			BLS.S		@2
+			MOVE.B		D2,D1
+@2			MOVE.B		(A2)+,D2
+			CMP.B		D2,D1
+			BLS.S		@3
+			MOVE.B		D2,D1
+@3			MOVE.B		D1,(A3)+
+			DBF 		D0,@1
+			BRA.S		@7
+
+;			Maximum value loop
+
+@4			MOVE.B		(A0)+,D1
+			MOVE.B		(A1)+,D2
+			CMP.B		D2,D1
+			BHS.S		@5
+			MOVE.B		D2,D1
+@5			MOVE.B		(A2)+,D2
+			CMP.B		D2,D1
+			BHS.S		@6
+			MOVE.B		D2,D1
+@6			MOVE.B		D1,(A3)+
+			DBF 		D0,@4
+
+;			Clean up and exit
+
+@7			MOVEM.L 	(SP)+,A2-A3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoFilter'
+
+ConvolveRow 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE ConvolveRow (inPtr: Ptr;
+;								   outPtr: Ptr;
+;								   numRows: INTEGER;
+;								   numCols: INTEGER;
+;								   rowBytes: INTEGER;
+;								   row: INTEGER;
+;								   col1: INTEGER;
+;								   col2: INTEGER;
+;								   kernel: UNIV Ptr);
+
+;			Parameter Offsets
+
+@inPtr		EQU 	28
+@outPtr 	EQU 	24
+@numRows	EQU 	22
+@numCols	EQU 	20
+@rowBytes	EQU 	18
+@row		EQU 	16
+@col1		EQU 	14
+@col2		EQU 	12
+@kernel 	EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	24
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3/D3-D7,-(SP)
+
+;			A0 is the input pointer
+
+			MOVE.L		@inPtr(A6),A0
+
+;			A1 is the output pointer
+
+			MOVE.L		@outPtr(A6),A1
+
+;			A2 points to the kernel
+
+			MOVE.L		@kernel(A6),A2
+
+;			D0 and D1 are current row and column
+
+			MOVE.W		@row(A6),D0
+			MOVE.W		@col1(A6),D1
+
+;			D2 is computed total
+
+@1			CLR.L		D2
+
+;			D3 is element counter
+
+			MOVE.W		(A2),D3
+
+;			A3 is pointer to kernel element
+
+			LEA 		16(A2),A3
+
+;			D7 is inside valid rectangle flag
+
+			MOVE.L		#1,D7
+			CMP.W		8(A2),D0
+			BGE.S		@2
+			CLR.W		D7
+@2			CMP.W		10(A2),D1
+			BGE.S		@3
+			CLR.W		D7
+@3			CMP.W		12(A2),D0
+			BLT.S		@4
+			CLR.W		D7
+@4			CMP.W		14(A2),D1
+			BLT.S		@5
+			CLR.W		D7
+
+;			Process next kernel element
+
+@5			TST.W		D7
+			BNE.S		@10
+
+;			Compute clipped offset
+
+			MOVE.W		D0,D5
+			MOVE.W		D1,D6
+			ADD.W		(A3),D5
+			BPL.S		@6
+			CLR.W		D5
+@6			ADD.W		2(A3),D6
+			BPL.S		@7
+			CLR.W		D6
+@7			CMP.W		@numRows(A6),D5
+			BLT.S		@8
+			MOVE.W		@numRows(A6),D5
+			SUB.W		#1,D5
+@8			CMP.W		@numCols(A6),D6
+			BLT.S		@9
+			MOVE.W		@numCols(A6),D6
+			SUB.W		#1,D6
+@9			SUB.W		D0,D5
+			SUB.W		D1,D6
+			MULS.W		@rowBytes(A6),D5
+			EXT.L		D6
+			ADD.L		D6,D5
+			BRA.S		@11
+
+;			Center is inside valid rectangle, use offset
+
+@10 		MOVE.L		8(A3),D5
+
+;			Load in pixel value
+
+@11 		CLR.L		D4
+			MOVE.B		(A0,D5.L),D4
+
+;			See if we can do a bit shift
+
+			MOVE.W		6(A3),D5
+			BMI.S		@12
+			LSL.L		D5,D4
+			TST.W		4(A3)
+			BPL.S		@13
+			SUB.L		D4,D2
+			BRA.S		@14
+
+;			Else do a multiply
+
+@12 		MULS.W		4(A3),D4
+@13 		ADD.L		D4,D2
+
+;			Move to next element
+
+@14 		ADDA.W		#12,A3
+			DBF 		D3,@5
+
+;			Scale and store pixel
+
+			MOVE.W		6(A2),D3
+			BMI.S		@17
+			TST.L		D2
+			BPL.S		@15
+			NEG.L		D2
+			LSR.L		D3,D2
+			NEG.W		D2
+			BRA.S		@16
+@15 		LSR.L		D3,D2
+@16 		TST.W		2(A2)
+			BPL.S		@18
+			NEG.W		D2
+			BRA.S		@18
+@17 		DIVS.W		2(A2),D2
+@18 		ADD.W		4(A2),D2
+			BPL.S		@19
+			CLR.W		D2
+@19 		CMP.W		#255,D2
+			BLE.S		@20
+			MOVE.W		#255,D2
+@20 		MOVE.B		D2,(A1)+
+
+;			Move to next pixel
+
+			ADDA.W		#1,A0
+			ADD.W		#1,D1
+			CMP.W		@col2(A6),D1
+			BNE 		@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3/D3-D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			SEG 		'ADoFilter'
+
+BlurLine	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE BlurLine (prevPtr: Ptr;
+;								thisPtr: Ptr;
+;								nextPtr: Ptr;
+;								destPtr: Ptr;
+;								count: INTEGER);
+;
+;			Parameter Offsets
+
+@prevPtr	EQU 	22
+@thisPtr	EQU 	18
+@nextPtr	EQU 	14
+@destPtr	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3,-(SP)
+
+;			Unload pointers
+
+			MOVE.L		@prevPtr(A6),A0
+			MOVE.L		@thisPtr(A6),A1
+			MOVE.L		@nextPtr(A6),A2
+			MOVE.L		@destPtr(A6),A3
+
+;			D0 is loop counter
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Set up registers
+
+			CLR.W		D1
+			CLR.W		D2
+
+;			Compute new values
+
+@1			MOVE.B		(A1)+,D1
+			ASL.W		#2,D1
+			MOVE.B		(A0)+,D2
+			ADD.W		D2,D1
+			MOVE.B		(A2)+,D2
+			ADD.W		D2,D1
+			MOVE.B		(A1),D2
+			ADD.W		D2,D1
+			MOVE.B		-2(A1),D2
+			ADD.W		D2,D1
+			ADD.W		#4,D1
+			ASR.W		#3,D1
+			MOVE.B		D1,(A3)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoFilter'
+
+BlurMoreLine	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE BlurMoreLine (prevPtr: Ptr;
+;									thisPtr: Ptr;
+;									nextPtr: Ptr;
+;									destPtr: Ptr;
+;									count: INTEGER);
+;
+;			Parameter Offsets
+
+@prevPtr	EQU 	22
+@thisPtr	EQU 	18
+@nextPtr	EQU 	14
+@destPtr	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3,-(SP)
+
+;			Unload pointers
+
+			MOVE.L		@prevPtr(A6),A0
+			MOVE.L		@thisPtr(A6),A1
+			MOVE.L		@nextPtr(A6),A2
+			MOVE.L		@destPtr(A6),A3
+
+;			D0 is loop counter
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Set up registers
+
+			CLR.W		D1
+			CLR.W		D2
+
+;			Compute new values
+
+@1			MOVE.B		-1(A1),D1
+			MOVE.B		(A1)+,D2
+			ADD.W		D2,D1
+			MOVE.B		(A1),D2
+			ADD.W		D2,D1
+			MOVE.B		(A0)+,D2
+			ADD.W		D2,D1
+			MOVE.B		(A2)+,D2
+			ADD.W		D2,D1
+			ADD.W		D1,D1
+			MOVE.B		-2(A0),D2
+			ADD.W		D2,D1
+			MOVE.B		(A0),D2
+			ADD.W		D2,D1
+			MOVE.B		-2(A2),D2
+			ADD.W		D2,D1
+			MOVE.B		(A2),D2
+			ADD.W		D2,D1
+			ADD.W		#7,D1
+			MULU.W		#4681,D1
+			SWAP		D1
+			MOVE.B		D1,(A3)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoFilter'
+
+SharpenLine 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE SharpenLine (prevPtr: Ptr;
+;								   thisPtr: Ptr;
+;								   nextPtr: Ptr;
+;								   destPtr: Ptr;
+;								   count: INTEGER);
+;
+;			Parameter Offsets
+
+@prevPtr	EQU 	22
+@thisPtr	EQU 	18
+@nextPtr	EQU 	14
+@destPtr	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3/D3,-(SP)
+
+;			Unload pointers
+
+			MOVE.L		@prevPtr(A6),A0
+			MOVE.L		@thisPtr(A6),A1
+			MOVE.L		@nextPtr(A6),A2
+			MOVE.L		@destPtr(A6),A3
+
+;			D0 is loop counter
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Set up registers
+
+			CLR.W		D1
+			CLR.W		D2
+			MOVE.W		#255,D3
+
+;			Compute new values
+
+@1			MOVE.B		(A1)+,D1
+			ASL.W		#3,D1
+			MOVE.B		(A0)+,D2
+			SUB.W		D2,D1
+			MOVE.B		(A2)+,D2
+			SUB.W		D2,D1
+			MOVE.B		(A1),D2
+			SUB.W		D2,D1
+			MOVE.B		-2(A1),D2
+			SUB.W		D2,D1
+			ADD.W		#2,D1
+			ASR.W		#2,D1
+
+			BMI.S		@2
+			CMP.W		D3,D1
+			BGT.S		@3
+
+			MOVE.B		D1,(A3)+
+			DBF 		D0,@1
+			BRA.S		@4
+
+@2			CLR.B		(A3)+
+			CLR.W		D1
+			DBF 		D0,@1
+			BRA.S		@4
+
+@3			MOVE.B		D3,(A3)+
+			CLR.W		D1
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+@4			MOVEM.L 	(SP)+,A2-A3/D3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoFilter'
+
+SharpenMoreLine 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE SharpenMoreLine (prevPtr: Ptr;
+;									   thisPtr: Ptr;
+;									   nextPtr: Ptr;
+;									   destPtr: Ptr;
+;									   count: INTEGER);
+;
+;			Parameter Offsets
+
+@prevPtr	EQU 	22
+@thisPtr	EQU 	18
+@nextPtr	EQU 	14
+@destPtr	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3/D3-D4,-(SP)
+
+;			Unload pointers
+
+			MOVE.L		@prevPtr(A6),A0
+			MOVE.L		@thisPtr(A6),A1
+			MOVE.L		@nextPtr(A6),A2
+			MOVE.L		@destPtr(A6),A3
+
+;			D0 is loop counter
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Set up registers
+
+			CLR.W		D1
+			CLR.W		D2
+			MOVE.W		#255,D3
+
+;			Compute new values
+
+@1			MOVE.B		(A1)+,D1
+			ASL.W		#2,D1
+			MOVE.W		D1,D4
+			ADD.W		D4,D1
+			ADD.W		D4,D1
+			MOVE.B		-1(A0),D2
+			SUB.W		D2,D1
+			MOVE.B		(A0)+,D2
+			SUB.W		D2,D1
+			MOVE.B		(A0),D2
+			SUB.W		D2,D1
+			MOVE.B		-2(A1),D2
+			SUB.W		D2,D1
+			MOVE.B		(A1),D2
+			SUB.W		D2,D1
+			MOVE.B		-1(A2),D2
+			SUB.W		D2,D1
+			MOVE.B		(A2)+,D2
+			SUB.W		D2,D1
+			MOVE.B		(A2),D2
+			SUB.W		D2,D1
+			ADD.W		#2,D1
+			ASR.W		#2,D1
+
+			BMI.S		@2
+			CMP.W		D3,D1
+			BGT.S		@3
+
+			MOVE.B		D1,(A3)+
+			DBF 		D0,@1
+			BRA.S		@4
+
+@2			CLR.B		(A3)+
+			CLR.W		D1
+			DBF 		D0,@1
+			BRA.S		@4
+
+@3			MOVE.B		D3,(A3)+
+			CLR.W		D1
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+@4			MOVEM.L 	(SP)+,A2-A3/D3-D4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoFilter'
+
+DoHighPassLine		PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoHighPassLine (srcPtr: Ptr;
+;									  dstPtr: Ptr;
+;									  count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	14
+@dstPtr 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	10
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D4,-(SP)
+
+;			Unload pointers
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+
+;			D0 is loop counter
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Set up registers
+
+			CLR.W		D1
+			CLR.W		D2
+			MOVE.W		#128,D3
+			MOVE.W		#255,D4
+
+;			Compute new values
+
+@1			MOVE.B		(A0)+,D1
+			MOVE.B		(A1),D2
+			SUB.W		D2,D1
+			ADD.W		D3,D1
+			BPL.S		@2
+			CLR.W		D1
+@2			CMP.W		D4,D1
+			BLE.S		@3
+			MOVE.W		D4,D1
+@3			MOVE.B		D1,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoFilter'
+
+DoUnsharpMaskLine	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoUnsharpMaskLine (srcPtr: Ptr;
+;										 dstPtr: Ptr;
+;										 amount: INTEGER;
+;										 count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	16
+@dstPtr 	EQU 	12
+@amount 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	12
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D5,-(SP)
+
+;			Unload pointers
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+
+;			D0 is loop counter
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			D1 contains amount
+
+			MOVE.W		@amount(A6),D1
+			MULU.W		#4096,D1
+			DIVU.W		#100,D1
+
+;			Set up constants
+
+			MOVE.W		#255,D4
+			MOVE.L		#$08000,D5
+
+;			Compute new values
+
+			CLR.W		D2
+@1			CLR.W		D3
+			MOVE.B		(A0)+,D2
+			MOVE.B		(A1),D3
+			SUB.W		D2,D3
+			MULS.W		D1,D3
+			LSL.L		#4,D3
+			ADD.L		D5,D3
+			SWAP		D3
+			SUB.W		D3,D2
+			BPL.S		@2
+			CLR.W		D2
+@2			CMP.W		D4,D2
+			BLE.S		@3
+			MOVE.W		D4,D2
+@3			MOVE.B		D2,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D5
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoFilter'
+
+DoMedianFilter	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoMedianFilter (srcPtr: Ptr;
+;									  dstPtr: Ptr;
+;									  rowBytes: INTEGER;
+;									  radius: INTEGER;
+;									  count: INTEGER;
+;									  rows: INTEGER;
+;									  col1: INTEGER;
+;									  col2: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	24
+@dstPtr 	EQU 	20
+@rowBytes	EQU 	18
+@radius 	EQU 	16
+@count		EQU 	14
+@rows		EQU 	12
+@col1		EQU 	10
+@col2		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	20
+
+;			Local variables
+
+@hist		EQU 	-512
+
+;			Size of local variables
+
+@localVars	EQU 	-512
+
+;			Save registers
+
+			LINK		A6,#@localVars
+			MOVEM.L 	A2-A4/D3-D7,-(SP)
+
+;			Set up pointers
+
+			LEA 		@hist(A6),A0
+			MOVE.L		@srcPtr(A6),A1
+			MOVE.L		@dstPtr(A6),A2
+
+;			D0 = count of bytes in histogram
+
+			CLR.L		D0
+
+;			D1 = rowBytes
+
+			MOVE.W		@rowBytes(A6),D1
+
+;			D2 = current column
+
+			CLR.W		D2
+
+;			D3 = total of bytes in histogram
+
+			CLR.L		D3
+
+;			D4 = rows - 1
+
+			MOVE.W		@rows(A6),D4
+			SUB.W		#1,D4
+
+;			Zero histogram
+
+			MOVE.L		A0,A4
+			MOVE.W		#127,D7
+@1			CLR.L		(A4)+
+			DBF 		D7,@1
+
+;			Initialize histogram
+
+			MOVE.W		@radius(A6),D6
+			NEG.W		D6
+@2			CMP.W		@col1(A6),D6
+			BLT.S		@4
+			CMP.W		@col2(A6),D6
+			BGT.S		@4
+			MOVE.L		A1,A4
+			ADDA.W		D6,A4
+			MOVE.W		D4,D7
+@3			CLR.L		D5
+			MOVE.B		(A4),D5
+			ADD.L		D5,D3
+			ADD.W		D5,D5
+			ADD.W		#1,(A0,D5.W)
+			ADD.W		#1,D0
+			ADDA.W		D1,A4
+			DBF 		D7,@3
+@4			ADD.W		#1,D6
+			CMP.W		@radius(A6),D6
+			BLE.S		@2
+
+;			Compute median value
+
+@5			MOVE.W		D0,D7
+			NEG.W		D7
+			ASR.W		#1,D7
+			MOVE.L		A0,A4
+
+			MOVE.L		D0,D6
+			ASL.L		#7,D6
+			CMP.L		D6,D3
+			BGE.S		@6A
+
+@6			ADD.W		(A4)+,D7
+			BMI.S		@6
+			MOVE.L		A4,D7
+			SUB.L		A0,D7
+			ASR.W		#1,D7
+			SUB.W		#1,D7
+			BRA.S		@6C
+
+@6A 		ADDA.W		#512,A4
+@6B 		ADD.W		-(A4),D7
+			BMI.S		@6B
+			MOVE.L		A4,D7
+			SUB.L		A0,D7
+			ASR.W		#1,D7
+
+@6C 		MOVE.B		D7,(A2)+
+
+;			Subtract out trailing column
+
+			MOVE.W		D2,D6
+			SUB.W		@radius(A6),D6
+			CMP.W		@col1(A6),D6
+			BLT.S		@8
+			MOVE.L		A1,A4
+			ADDA.W		D6,A4
+			MOVE.W		D4,D7
+@7			CLR.L		D5
+			MOVE.B		(A4),D5
+			SUB.L		D5,D3
+			ADD.W		D5,D5
+			SUB.W		#1,(A0,D5.W)
+			SUB.W		#1,D0
+			ADDA.W		D1,A4
+			DBF 		D7,@7
+
+;			Add in leading column
+
+@8			MOVE.W		D2,D6
+			ADD.W		@radius(A6),D6
+			ADD.W		#1,D6
+			CMP.W		@col2(A6),D6
+			BGT.S		@10
+			MOVE.L		A1,A4
+			ADDA.W		D6,A4
+			MOVE.W		D4,D7
+@9			CLR.L		D5
+			MOVE.B		(A4),D5
+			ADD.L		D5,D3
+			ADD.W		D5,D5
+			ADD.W		#1,(A0,D5.W)
+			ADD.W		#1,D0
+			ADDA.W		D1,A4
+			DBF 		D7,@9
+
+;			Move to next column
+
+@10 		ADD.W		#1,D2
+			CMP.W		@count(A6),D2
+			BNE 		@5
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A4/D3-D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			SEG 		'ADoFilter'
+
+DoFacet1	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoFacet1 (prevPtr: Ptr;
+;								thisPtr: Ptr;
+;								nextPtr: Ptr;
+;								destPtr: Ptr;
+;								count: INTEGER);
+;
+;			Parameter Offsets
+
+@prevPtr	EQU 	22
+@thisPtr	EQU 	18
+@nextPtr	EQU 	14
+@destPtr	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3/D3-D4,-(SP)
+
+;			Unload pointers
+
+			MOVE.L		@prevPtr(A6),A0
+			MOVE.L		@thisPtr(A6),A1
+			MOVE.L		@nextPtr(A6),A2
+			MOVE.L		@destPtr(A6),A3
+
+;			D0 is loop counter
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Compute sum and sum of squares
+
+@1			CLR.W		D1
+			CLR.L		D2
+
+			CLR.W		D3
+			MOVE.B		-1(A0),D3
+			ADD.W		D3,D1
+			MULU.W		D3,D3
+			ADD.L		D3,D2
+
+			CLR.W		D3
+			MOVE.B		(A0)+,D3
+			ADD.W		D3,D1
+			MULU.W		D3,D3
+			ADD.L		D3,D2
+
+			CLR.W		D3
+			MOVE.B		(A0),D3
+			ADD.W		D3,D1
+			MULU.W		D3,D3
+			ADD.L		D3,D2
+
+			CLR.W		D3
+			MOVE.B		-1(A1),D3
+			ADD.W		D3,D1
+			MULU.W		D3,D3
+			ADD.L		D3,D2
+
+			CLR.W		D3
+			MOVE.B		(A1)+,D3
+			ADD.W		D3,D1
+			MULU.W		D3,D3
+			ADD.L		D3,D2
+
+			CLR.W		D3
+			MOVE.B		(A1),D3
+			ADD.W		D3,D1
+			MULU.W		D3,D3
+			ADD.L		D3,D2
+
+			CLR.W		D3
+			MOVE.B		-1(A2),D3
+			ADD.W		D3,D1
+			MULU.W		D3,D3
+			ADD.L		D3,D2
+
+			CLR.W		D3
+			MOVE.B		(A2)+,D3
+			ADD.W		D3,D1
+			MULU.W		D3,D3
+			ADD.L		D3,D2
+
+			CLR.W		D3
+			MOVE.B		(A2),D3
+			ADD.W		D3,D1
+			MULU.W		D3,D3
+			ADD.L		D3,D2
+
+;			Compute variance
+
+			MOVE.L		D2,D3
+			ASL.L		#3,D3
+			ADD.L		D3,D2
+			MULU.W		D1,D1
+			SUB.L		D1,D2
+			DIVU.W		#21,D2
+
+;			Compute square root
+
+			CLR.W		D1
+			MOVE.W		#$80,D3
+@4			ADD.W		D3,D1
+			MOVE.W		D1,D4
+			MULU.W		D4,D4
+			CMP.W		D4,D2
+			BHS.S		@5
+			SUB.W		D3,D1
+@5			LSR.W		#1,D3
+			BNE.S		@4
+
+;			Move to next pixel
+
+			MOVE.B		D1,(A3)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3/D3-D4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			SEG 		'ADoFilter'
+
+DoFacet2	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoFacet2 (prevPtr: Ptr;
+;								thisPtr: Ptr;
+;								nextPtr: Ptr;
+;								destPtr: Ptr;
+;								count: INTEGER);
+;
+;			Parameter Offsets
+
+@prevPtr	EQU 	22
+@thisPtr	EQU 	18
+@nextPtr	EQU 	14
+@destPtr	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3,-(SP)
+
+;			Unload pointers
+
+			MOVE.L		@prevPtr(A6),A0
+			MOVE.L		@thisPtr(A6),A1
+			MOVE.L		@nextPtr(A6),A2
+			MOVE.L		@destPtr(A6),A3
+
+;			D0 is loop counter
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Compute average
+
+			CLR.W		D2
+@1			MOVE.L		#4,D1
+			MOVE.B		-1(A0),D2
+			ADD.W		D2,D1
+			MOVE.B		(A0)+,D2
+			ADD.W		D2,D1
+			MOVE.B		(A0),D2
+			ADD.W		D2,D1
+			MOVE.B		-1(A1),D2
+			ADD.W		D2,D1
+			MOVE.B		(A1)+,D2
+			ADD.W		D2,D1
+			MOVE.B		(A1),D2
+			ADD.W		D2,D1
+			MOVE.B		-1(A2),D2
+			ADD.W		D2,D1
+			MOVE.B		(A2)+,D2
+			ADD.W		D2,D1
+			MOVE.B		(A2),D2
+			ADD.W		D2,D1
+			DIVU.W		#9,D1
+			MOVE.B		D1,(A3)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			SEG 		'ADoFilter'
+
+DoFacet3	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoFacet3 (prevPtr: Ptr;
+;								thisPtr: Ptr;
+;								nextPtr: Ptr;
+;								destPtr: Ptr;
+;								count: INTEGER);
+;
+;			Parameter Offsets
+
+@prevPtr	EQU 	22
+@thisPtr	EQU 	18
+@nextPtr	EQU 	14
+@destPtr	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3,-(SP)
+
+;			Unload pointers
+
+			MOVE.L		@prevPtr(A6),A0
+			MOVE.L		@thisPtr(A6),A1
+			MOVE.L		@nextPtr(A6),A2
+			MOVE.L		@destPtr(A6),A3
+
+;			D0 is loop counter
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Find the best region
+
+@1			MOVE.B		(A1)+,D1
+			MOVE.L		#4,D2
+
+			CMP.B		(A1),D1
+			BLS.S		@2
+			MOVE.B		(A1),D1
+			MOVE.L		#5,D2
+
+@2			CMP.B		-2(A1),D1
+			BLS.S		@3
+			MOVE.B		-2(A1),D1
+			MOVE.L		#3,D2
+
+@3			CMP.B		(A0)+,D1
+			BLS.S		@4
+			MOVE.B		-1(A0),D1
+			MOVE.L		#1,D2
+
+@4			CMP.B		(A2)+,D1
+			BLS.S		@5
+			MOVE.B		-1(A2),D1
+			MOVE.L		#7,D2
+
+@5			CMP.B		-2(A2),D1
+			BLS.S		@6
+			MOVE.B		-2(A2),D1
+			MOVE.L		#6,D2
+
+@6			CMP.B		(A0),D1
+			BLS.S		@7
+			MOVE.B		(A0),D1
+			MOVE.L		#2,D2
+
+@7			CMP.B		(A2),D1
+			BLS.S		@8
+			MOVE.B		(A2),D1
+			MOVE.L		#8,D2
+
+@8			CMP.B		-2(A0),D1
+			BLS.S		@9
+			CLR.L		D2
+
+@9			MOVE.B		D2,(A3)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			SEG 		'ADoFilter'
+
+DoFacet4	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoFacet4 (prevPtr: Ptr;
+;								thisPtr: Ptr;
+;								nextPtr: Ptr;
+;								destPtr: Ptr;
+;								count: INTEGER);
+;
+;			Parameter Offsets
+
+@prevPtr	EQU 	22
+@thisPtr	EQU 	18
+@nextPtr	EQU 	14
+@destPtr	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3,-(SP)
+
+;			Unload pointers
+
+			MOVE.L		@prevPtr(A6),A0
+			MOVE.L		@thisPtr(A6),A1
+			MOVE.L		@nextPtr(A6),A2
+			MOVE.L		@destPtr(A6),A3
+
+;			D0 is loop counter
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Pick indexed value
+
+			CLR.W		D1
+@1			MOVE.B		(A3),D1
+			CMP.B		#6,D1
+			BGE.S		@3
+			CMP.B		#3,D1
+			BGE.S		@2
+			MOVE.B		-1(A0,D1.W),(A3)+
+			BRA.S		@4
+@2			MOVE.B		-4(A1,D1.W),(A3)+
+			BRA.S		@4
+@3			MOVE.B		-7(A2,D1.W),(A3)+
+@4			ADDA.W		#1,A0
+			ADDA.W		#1,A1
+			ADDA.W		#1,A2
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoFilter'
+
+DoDiffuseDarken 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoDiffuseDarken (prevPtr: Ptr;
+;									   thisPtr: Ptr;
+;									   nextPtr: Ptr;
+;									   destPtr: Ptr;
+;									   count: INTEGER);
+;
+;			Parameter Offsets
+
+@prevPtr	EQU 	22
+@thisPtr	EQU 	18
+@nextPtr	EQU 	14
+@destPtr	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3,-(SP)
+
+;			Unload pointers
+
+			MOVE.L		@prevPtr(A6),A0
+			MOVE.L		@thisPtr(A6),A1
+			MOVE.L		@nextPtr(A6),A2
+			MOVE.L		@destPtr(A6),A3
+
+;			D0 is loop counter
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Pick indexed value
+
+			CLR.W		D1
+@1			MOVE.B		(A3),D1
+			MOVE.B		(A1),(A3)
+			CMP.B		#6,D1
+			BGE.S		@3
+			CMP.B		#3,D1
+			BGE.S		@2
+			MOVE.B		-1(A0,D1.W),D1
+			BRA.S		@4
+@2			MOVE.B		-4(A1,D1.W),D1
+			BRA.S		@4
+@3			MOVE.B		-7(A2,D1.W),D1
+@4			CMP.B		(A3),D1
+			BHS.S		@5
+			MOVE.B		D1,(A3)
+@5			ADDA.W		#1,A0
+			ADDA.W		#1,A1
+			ADDA.W		#1,A2
+			ADDA.W		#1,A3
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoFilter'
+
+DoDiffuseLighten	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoDiffuseLighten (prevPtr: Ptr;
+;										thisPtr: Ptr;
+;										nextPtr: Ptr;
+;										destPtr: Ptr;
+;										count: INTEGER);
+;
+;			Parameter Offsets
+
+@prevPtr	EQU 	22
+@thisPtr	EQU 	18
+@nextPtr	EQU 	14
+@destPtr	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3,-(SP)
+
+;			Unload pointers
+
+			MOVE.L		@prevPtr(A6),A0
+			MOVE.L		@thisPtr(A6),A1
+			MOVE.L		@nextPtr(A6),A2
+			MOVE.L		@destPtr(A6),A3
+
+;			D0 is loop counter
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Pick indexed value
+
+			CLR.W		D1
+@1			MOVE.B		(A3),D1
+			MOVE.B		(A1),(A3)
+			CMP.B		#6,D1
+			BGE.S		@3
+			CMP.B		#3,D1
+			BGE.S		@2
+			MOVE.B		-1(A0,D1.W),D1
+			BRA.S		@4
+@2			MOVE.B		-4(A1,D1.W),D1
+			BRA.S		@4
+@3			MOVE.B		-7(A2,D1.W),D1
+@4			CMP.B		(A3),D1
+			BLS.S		@5
+			MOVE.B		D1,(A3)
+@5			ADDA.W		#1,A0
+			ADDA.W		#1,A1
+			ADDA.W		#1,A2
+			ADDA.W		#1,A3
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoFilter'
+
+DoTraceContour	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoTraceContour (prevPtr: Ptr;
+;									  thisPtr: Ptr;
+;									  nextPtr: Ptr;
+;									  destPtr: Ptr;
+;									  count: INTEGER;
+;									  level: INTEGER;
+;									  upper: BOOLEAN);
+;
+;			Parameter Offsets
+
+@prevPtr	EQU 	26
+@thisPtr	EQU 	22
+@nextPtr	EQU 	18
+@destPtr	EQU 	14
+@count		EQU 	12
+@level		EQU 	10
+@upper		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	22
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3,-(SP)
+
+;			Unload pointers
+
+			MOVE.L		@prevPtr(A6),A0
+			MOVE.L		@thisPtr(A6),A1
+			MOVE.L		@nextPtr(A6),A2
+			MOVE.L		@destPtr(A6),A3
+
+;			D0 is loop counter
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			D1 is level
+
+			MOVE.W		@level(A6),D1
+
+;			D2 is 255
+
+			MOVE.W		#255,D2
+
+;			Case on upper flag
+
+			TST.B		@upper(A6)
+			BNE.S		@6
+
+;			Lower edge loop
+
+@1			CLR.B		(A3)+
+			CMP.B		(A1)+,D1
+			BHI.S		@5
+			CMP.B		(A1),D1
+			BLS.S		@2
+			MOVE.B		D2,-1(A3)
+@2			CMP.B		-2(A1),D1
+			BLS.S		@3
+			MOVE.B		D2,-1(A3)
+@3			CMP.B		(A0),D1
+			BLS.S		@4
+			MOVE.B		D2,-1(A3)
+@4			CMP.B		(A2),D1
+			BLS.S		@5
+			MOVE.B		D2,-1(A3)
+@5			ADDA.W		#1,A0
+			ADDA.W		#1,A2
+			DBF 		D0,@1
+			BRA.S		@11
+
+;			Upper edge loop
+
+@6			CLR.B		(A3)+
+			CMP.B		(A1)+,D1
+			BLO.S		@10
+			CMP.B		(A1),D1
+			BHS.S		@7
+			MOVE.B		D2,-1(A3)
+@7			CMP.B		-2(A1),D1
+			BHS.S		@8
+			MOVE.B		D2,-1(A3)
+@8			CMP.B		(A0),D1
+			BHS.S		@9
+			MOVE.B		D2,-1(A3)
+@9			CMP.B		(A2),D1
+			BHS.S		@10
+			MOVE.B		D2,-1(A3)
+@10 		ADDA.W		#1,A0
+			ADDA.W		#1,A2
+			DBF 		D0,@6
+
+;			Clean up and exit
+
+@11 		MOVEM.L 	(SP)+,A2-A3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoFilter'
+
+MakeDiffuseNoise	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE MakeDiffuseNoise (dstPtr: Ptr;
+;										count: INTEGER);
+;
+;			Parameter Offsets
+
+@dstPtr 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	6
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A4/D7,-(SP)
+
+;			Unload pointer
+
+			MOVE.L		@dstPtr(A6),A4
+
+;			D7 is loop counter
+
+			MOVE.W		@count(A6),D7
+			SUB.W		#1,D7
+
+;			Find a value
+
+@1			CLR.W		-(SP)
+			_Random
+			MOVE.W		(SP)+,D1
+			AND.W		#7,D1
+			CMP.W		#4,D1
+			BNE.S		@2
+			MOVE.W		#8,D1
+@2			MOVE.B		D1,(A4)+
+			DBF 		D7,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A4/D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoFilter'
+
+MakeUniformNoise	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE MakeUniformNoise (dstPtr: Ptr;
+;										amount: INTEGER;
+;										count: INTEGER);
+;
+;			Parameter Offsets
+
+@dstPtr 	EQU 	12
+@amount 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	8
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A4/D4-D7,-(SP)
+
+;			Unload pointer
+
+			MOVE.L		@dstPtr(A6),A4
+
+;			D7 is loop counter
+
+			MOVE.W		@count(A6),D7
+			SUB.W		#1,D7
+
+;			D6 is amount
+
+			MOVE.W		@amount(A6),D6
+
+;			D5 is twice amount
+
+			MOVE.W		D6,D5
+			ADD.W		D5,D5
+
+;			D4 is mask
+
+			MOVE.W		#1,D4
+@1			LSL.W		#1,D4
+			CMP.W		D5,D4
+			BLE.S		@1
+			SUB.W		#1,D4
+
+;			Find a value
+
+@2			CLR.W		-(SP)
+			_Random
+			MOVE.W		(SP)+,D1
+			AND.W		D4,D1
+			CMP.W		D5,D1
+			BGT.S		@2
+			SUB.W		D6,D1
+			MOVE.W		D1,(A4)+
+			DBF 		D7,@2
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A4/D4-D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoFilter'
+
+MakeGaussianNoise	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE MakeGaussianNoise (dstPtr: Ptr;
+;										 amount: INTEGER;
+;										 count: INTEGER);
+;
+;			Parameter Offsets
+
+@dstPtr 	EQU 	12
+@amount 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	8
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A4/D5-D7,-(SP)
+
+;			Unload pointer
+
+			MOVE.L		@dstPtr(A6),A4
+
+;			D7 is loop counter
+
+			MOVE.W		@count(A6),D7
+			SUB.W		#1,D7
+
+;			D6 is amount
+
+			MOVE.W		@amount(A6),D6
+
+;			Find a value
+
+@2			SUBA.W		#12,SP
+
+			_Random
+			MOVE.W		(SP)+,D1
+			ASR.W		#4,D1
+			MOVE.W		D1,D5
+
+			_Random
+			MOVE.W		(SP)+,D1
+			ASR.W		#4,D1
+			ADD.W		D1,D5
+
+			_Random
+			MOVE.W		(SP)+,D1
+			ASR.W		#4,D1
+			ADD.W		D1,D5
+
+			_Random
+			MOVE.W		(SP)+,D1
+			ASR.W		#4,D1
+			ADD.W		D1,D5
+
+			_Random
+			MOVE.W		(SP)+,D1
+			ASR.W		#4,D1
+			ADD.W		D1,D5
+
+			_Random
+			MOVE.W		(SP)+,D1
+			ASR.W		#4,D1
+			ADD.W		D1,D5
+
+			MULS.W		#23170,D5
+			ASL.L		#2,D5
+			ADD.L		#$08000,D5
+			SWAP		D5
+
+			MULS.W		D6,D5
+			ASL.L		#4,D5
+			ADD.L		#$08000,D5
+			SWAP		D5
+
+			MOVE.W		D5,(A4)+
+			DBF 		D7,@2
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A4/D5-D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			SEG 		'ADoFilter'
+
+DoAddNoise	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoAddNoise (srcPtr: Ptr;
+;								  dstPtr: Ptr;
+;								  noisePtr: Ptr;
+;								  count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	18
+@dstPtr 	EQU 	14
+@noisePtr	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	14
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVE.L		A2,-(SP)
+
+;			Unload addresses
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.L		@noisePtr(A6),A2
+
+;			Unload count
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Add noise
+
+			MOVE.W		#255,D1
+			CLR.W		D2
+@1			MOVE.B		(A0)+,D2
+			ADD.W		(A2)+,D2
+			BPL.S		@2
+			CLR.W		D2
+@2			CMP.W		D1,D2
+			BLE.S		@3
+			MOVE.W		D1,D2
+@3			MOVE.B		D2,(A1)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVE.L		(SP)+,A2
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoFilter'
+
+DoMosaicRow 	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoMosaicRow (dataPtr: Ptr;
+;								   cellSize: INTEGER;
+;								   count: INTEGER);
+;
+;			Parameter Offsets
+
+@dataPtr	EQU 	12
+@cellSize	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	8
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D4,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@dataPtr(A6),A0
+			MOVE.L		A0,A1
+			MOVE.W		@count(A6),D0
+			MOVE.W		@cellSize(A6),D1
+
+;			Initialize loop
+
+@1			CLR.L		D2
+			CLR.L		D3
+			CLR.L		D4
+
+;			Add in next input pixel
+
+@2			MOVE.B		(A0)+,D4
+			ADD.L		D4,D3
+			ADD.W		#1,D2
+
+;			See if we ran out of input pixels
+
+			SUB.W		#1,D0
+			BEQ.S		@3
+
+;			See if the cell is full
+
+			CMP.W		D1,D2
+			BNE.S		@2
+
+;			Add in 1/2 of count
+
+@3			MOVE.L		D2,D4
+			LSR.W		#1,D4
+			ADD.L		D4,D3
+
+;			Divide by count
+
+			DIVU.W		D2,D3
+
+;			Save result
+
+			SUB.W		#1,D2
+@4			MOVE.B		D3,(A1)+
+			DBF 		D2,@4
+
+;			If count is not zero, move to next block
+
+			TST.W		D0
+			BNE.S		@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D4
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoFilter'
+
+SetJustInside		PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE SetJustInside (prevPtr: Ptr;
+;									 thisPtr: Ptr;
+;									 nextPtr: Ptr;
+;									 destPtr: Ptr;
+;									 count: INTEGER);
+;
+;			Parameter Offsets
+
+@prevPtr	EQU 	22
+@thisPtr	EQU 	18
+@nextPtr	EQU 	14
+@destPtr	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@prevPtr(A6),A0
+			MOVE.L		@thisPtr(A6),A1
+			MOVE.L		@nextPtr(A6),A2
+			MOVE.L		@destPtr(A6),A3
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Set to 255 if just inside selection
+
+			MOVE.W		#255,D1
+@1			TST.B		(A1)+
+			BPL.S		@3
+			TST.B		(A1)
+			BPL.S		@2
+			TST.B		-2(A1)
+			BPL.S		@2
+			TST.B		(A0)
+			BPL.S		@2
+			TST.B		(A2)
+			BMI.S		@3
+@2			MOVE.B		D1,(A3)
+@3			ADDA.W		#1,A0
+			ADDA.W		#1,A2
+			ADDA.W		#1,A3
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoFilter'
+
+SetJustOutside		PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE SetJustOutside (prevPtr: Ptr;
+;									  thisPtr: Ptr;
+;									  nextPtr: Ptr;
+;									  destPtr: Ptr;
+;									  count: INTEGER);
+;
+;			Parameter Offsets
+
+@prevPtr	EQU 	22
+@thisPtr	EQU 	18
+@nextPtr	EQU 	14
+@destPtr	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A3,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@prevPtr(A6),A0
+			MOVE.L		@thisPtr(A6),A1
+			MOVE.L		@nextPtr(A6),A2
+			MOVE.L		@destPtr(A6),A3
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Set to 255 if just outside selection
+
+			MOVE.W		#255,D1
+@1			TST.B		(A1)+
+			BMI.S		@3
+			TST.B		(A1)
+			BMI.S		@2
+			TST.B		-2(A1)
+			BMI.S		@2
+			TST.B		(A0)
+			BMI.S		@2
+			TST.B		(A2)
+			BPL.S		@3
+@2			MOVE.B		D1,(A3)
+@3			ADDA.W		#1,A0
+			ADDA.W		#1,A2
+			ADDA.W		#1,A3
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			END

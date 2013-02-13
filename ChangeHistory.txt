@@ -1,0 +1,61 @@
+Photoshop version 1.0.1, file: ChangeHistory.txt
+  Computer History Museum, www.computerhistory.org
+  This material is (C)Copyright 1990 Adobe Systems Inc.
+  It may not be distributed to third parties.
+  It is licensed for non-commercial use according to 
+  www.computerhistory.org/softwarelicense/photoshop/
+
+
+<<< Version 1.0 Released >>>
+
+Fixed a bug that caused multiple previews not to work correctly on feathered, non-floating selections.
+
+If running on a system localized to a country that uses the metric system, the default unit for image dimensions changes from inches to cm.  Resolutions (pixels/inch, lines/inch, dots/inch) still default to English units.
+
+<<< Version 1.0 International >>>
+
+Modified Photoshop to read the incorrectly formatted LZW compressed TIFFs sometimes written by version 1.0 of Photoshop, with no loss of data.
+
+<<< Version 1.0x1 >>>
+
+Fixed the bug that was sometimes causing Photoshop to incorrectly format LZW compressed TIFF and GIF files.  This version can also read all TIFF and GIF files written by version 1.0 of Photoshop with no loss of data.
+
+<<< Version 1.0.1 Released >>>
+
+Photoshop can now read PixelPaint format files created by PixelPaint version 2.0.
+
+After deleting the only alpha channel of an RGB image, the displayed channel is now switched to RGB rather than blue.
+
+Fixed a number of bugs, caused by the PMSP, where Photoshop was deleting files in the system folder when creating files of the same name elsewhere.
+
+The “Stretch” effect has been renamed “Stretch/Shrink”.
+
+The temporary file been renamed “PS Temp” (from “PS.Temp”), and now has a custom icon.
+
+Improved the error message if Photoshop is unable to open the temporary file.
+
+Undo is killed and virtual memory is compressed before calling a plug-in acquisition module.  This allows the plug-in to accurately determine the maximum size image that can be scanned.
+
+Fixed a bug where Photoshop would sometimes not save to multiple disks if replacing an existing file.
+
+The transfer function is now included in the master file of a DCS (five-file) EPS set.
+
+The transfer function is now prepended to the printer’s existing transfer function.  This should make Photoshop compatible with PostScript density calibration utilities.
+
+All slider controls now respond to mouse downs anywhere along their length.  The nearest triangle jumps to the mouse down location.
+
+When saving a less-than-72dpi EPS file with an 8-bit preview PICT, the preview PICT is no longer up-sampled to 72dpi.
+
+The “Monitor Gamma” field in the gray scale transfer function dialog has been renamed “Image Gamma”, to distinguish it from the field in the separation setup dialog.
+
+An “Image Gamma” field has been added to the color transfer function dialog.  It is required because the color separator now longer converts images to gamma 1.0 during separation, but instead leaves them at the monitor’s gamma.  The net result is improved dynamic range, with less contouring in the shadow areas.
+
+The upper bound of the legal range for gamma values has been increased from 2.0 to 2.2.
+
+When measuring CMYK values on the gray scale image, the percent readout on the K channel is now adjusted for the current monitor gamma.
+
+Photoshop now uses a much higher resolution table when converting from RGB to CMYK.  The new table takes about 3 minutes to compute (the previous table took only 20 seconds).  So, to avoid slowing down every color separation, the most recently used table is stored in a file named “PS Table” in the preferences folder.  If the separation setup has changed since the last separation, the table is automatically recomputed.
+
+The clipping performed by the color separator to meet the “Total Ink Limit” now adds black to compensate for the extra undercolor removed.
+
+There is a new field in the separation setup dialog, called “Undercolor Addition”.  It is used to reduce the amount of undercolor removal in the very dark areas.

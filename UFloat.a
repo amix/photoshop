@@ -1,0 +1,854 @@
+;Photoshop version 1.0.1, file: UFloat.a
+;  Computer History Museum, www.computerhistory.org
+;  This material is (C)Copyright 1990 Adobe Systems Inc.
+;  It may not be distributed to third parties.
+;  It is licensed for non-commercial use according to 
+;  www.computerhistory.org/softwarelicense/photoshop/ 
+
+			INCLUDE 	'Traps.a'
+
+; **********************************************************************
+
+					SEG 		'ARes'
+
+DoMakeMonochrome	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoMakeMonochrome (rPtr: Ptr;
+;										rTable: TLookUpTable;
+;										gPtr: Ptr;
+;										gTable: TLookUpTable;
+;										bPtr: Ptr;
+;										bTable: TLookUpTable;
+;										mPtr: Ptr;
+;										count: INTEGER);
+;
+;			Parameter Offsets
+
+@rPtr		EQU 	34
+@rTable 	EQU 	30
+@gPtr		EQU 	26
+@gTable 	EQU 	22
+@bPtr		EQU 	18
+@bTable 	EQU 	14
+@mPtr		EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	30
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A6,-(SP)
+
+;			Red pass
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+			MOVE.L		@rPtr(A6),A0
+			MOVE.L		@rTable(A6),A1
+
+			MOVE.L		@gPtr(A6),A2
+			MOVE.L		@gTable(A6),A3
+
+			MOVE.L		@bPtr(A6),A4
+			MOVE.L		@bTable(A6),A5
+
+			MOVE.L		@mPtr(A6),A6
+
+			CLR.W		D1
+
+@1			MOVE.B		(A0)+,D1
+			MOVE.B		(A1,D1.W),D2
+			MOVE.B		(A2)+,D1
+			ADD.B		(A3,D1.W),D2
+			MOVE.B		(A4)+,D1
+			ADD.B		(A5,D1.W),D2
+			MOVE.B		D2,(A6)+
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A6
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoCommand'
+
+ZapMaskRGB		PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE ZapMaskRGB (rDataPtr: Ptr;
+;								  gDataPtr: Ptr;
+;								  bDataPtr: Ptr;
+;								  grayLUT: TRGBLookUpTable;
+;								  maskPtr: Ptr;
+;								  count: INTEGER;
+;								  map: TLookUpTable);
+;
+;			Parameter Offsets
+
+@rDataPtr	EQU 	30
+@gDataPtr	EQU 	26
+@bDataPtr	EQU 	22
+@grayLUT	EQU 	18
+@maskPtr	EQU 	14
+@count		EQU 	12
+@map		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	26
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A5/D3,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@rDataPtr(A6),A0
+			MOVE.L		@gDataPtr(A6),A1
+			MOVE.L		@bDataPtr(A6),A2
+			MOVE.L		@grayLUT(A6),A3
+			MOVE.L		@maskPtr(A6),A4
+			MOVE.L		@map(A6),A5
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Initialize index
+
+			CLR.W		D1
+			MOVE.W		#256,D2
+			MOVE.W		#512,D3
+
+;			Look up luminosity in LUT
+
+@1			MOVE.B		(A0)+,D1
+			MOVE.B		(A3,D1.W),D1
+			MOVE.B		(A1)+,D2
+			ADD.B		(A3,D2.W),D1
+			MOVE.B		(A2)+,D3
+			ADD.B		(A3,D3.W),D1
+			MOVE.B		(A5,D1.W),D1
+
+;			Compare to existing mask value
+
+			CMP.B		(A4)+,D1
+			BHS.S		@2
+			MOVE.B		D1,-1(A4)
+@2			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A5/D3
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ARes'
+
+ZapMaskLUT		PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE ZapMaskLUT (dataPtr: Ptr;
+;								  maskPtr: Ptr;
+;								  count: INTEGER;
+;								  map: TLookUpTable);
+;
+;			Parameter Offsets
+
+@dataPtr	EQU 	18
+@maskPtr	EQU 	14
+@count		EQU 	12
+@map		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	14
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVE.L		A2,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@dataPtr(A6),A0
+			MOVE.L		@maskPtr(A6),A1
+			MOVE.L		@map(A6),A2
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Process bytes
+
+			CLR.W		D1
+@1			MOVE.B		(A0)+,D1
+			MOVE.B		(A2,D1.W),D1
+			CMP.B		(A1)+,D1
+			BHS.S		@2
+			MOVE.B		D1,-1(A1)
+@2			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVE.L		(SP)+,A2
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ARes'
+
+DoBlendBelow	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoBlendBelow (maskPtr: Ptr;
+;									floatPtr: Ptr;
+;									belowPtr: Ptr;
+;									count: INTEGER;
+;									mode: INTEGER;
+;									mat: INTEGER);
+;
+;			Parameter Offsets
+
+@maskPtr	EQU 	22
+@floatPtr	EQU 	18
+@belowPtr	EQU 	14
+@count		EQU 	12
+@mode		EQU 	10
+@mat		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2/D3-D7,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@maskPtr(A6),A0
+			MOVE.L		@floatPtr(A6),A1
+			MOVE.L		@belowPtr(A6),A2
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+			MOVE.W		@mode(A6),D6
+			MOVE.W		@mat(A6),D7
+
+;			Get values
+
+			CLR.W		D1
+			CLR.W		D2
+			CLR.W		D3
+
+;			Get source value
+
+@1			MOVE.B		(A1)+,D2
+
+;			Get mask value
+
+			MOVE.B		(A0)+,D1
+
+;			If mask is zero, leave alone
+
+			BEQ.S		@8
+
+;			If mask is 255, copy from source
+
+			NOT.B		D1
+			BEQ.S		@5
+
+;			Compute inverse delta
+
+			CLR.W		D3
+			MOVE.B		(A2),D3
+			TST.W		D7
+			BMI.S		@2
+			SUB.W		D7,D3
+			BPL.S		@4
+			BRA.S		@3
+@2			SUB.W		D2,D3
+			BPL.S		@4
+
+;			Case 1: negative delta
+
+@3			NEG.W		D3
+			MULU.W		D1,D3
+			ADD.W		#127,D3
+			MULU.W		#257,D3
+			SWAP		D3
+			SUB.W		D3,D2
+			BPL.S		@5
+			CLR.W		D2
+			BRA.S		@5
+
+;			Case 2: positive delta
+
+@4			MULU.W		D1,D3
+			ADD.W		#127,D3
+			MULU.W		#257,D3
+			SWAP		D3
+			ADD.W		D3,D2
+			CMP.W		#255,D2
+			BLE.S		@5
+			MOVE.W		#255,D2
+
+;			Save value to destination if allowed
+
+@5			CMP.W		#3,D6
+			BEQ.S		@6
+			CMP.W		#2,D6
+			BNE.S		@7
+
+;			Mode - Darken only
+
+			CMP.B		(A2),D2
+			BHS.S		@8
+			BRA.S		@7
+
+;			Mode - Lighten only
+
+@6			CMP.B		(A2),D2
+			BLS.S		@8
+
+;			Save the value
+
+@7			MOVE.B		D2,(A2)
+
+;			Move to next pixel
+
+@8			ADDA.W		#1,A2
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2/D3-D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ARes'
+
+DoBlendColorOnly	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoBlendColorOnly (grayPtr: Ptr;
+;										rPtr: Ptr;
+;										gPtr: Ptr;
+;										bPtr: Ptr;
+;										grayLUT: TRGBLookUpTable;
+;										count: INTEGER);
+;
+;			Parameter Offsets
+
+@grayPtr	EQU 	26
+@rPtr		EQU 	22
+@gPtr		EQU 	18
+@bPtr		EQU 	14
+@grayLUT	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	22
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	A2-A4/D3-D7,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@grayPtr(A6),A0
+			MOVE.L		@rPtr(A6),A1
+			MOVE.L		@gPtr(A6),A2
+			MOVE.L		@bPtr(A6),A3
+			MOVE.L		@grayLUT(A6),A4
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Get old luminosity
+
+@1			CLR.W		D7
+			MOVE.B		(A0)+,D7
+
+;			Compute new luminosity value
+
+			CLR.W		D2
+			CLR.W		D3
+			CLR.W		D4
+			MOVE.B		(A1)+,D2
+			MOVE.B		(A2)+,D3
+			MOVE.B		(A3)+,D4
+			CLR.W		D6
+			MOVE.B		(A4,D2.W),D6
+			ADDA.W		#256,A4
+			ADD.B		(A4,D3.W),D6
+			ADDA.W		#256,A4
+			ADD.B		(A4,D4.W),D6
+			SUBA.W		#512,A4
+
+;			If luminosities are equal, no need to scale
+
+			CMP.W		D6,D7
+			BEQ 		@8
+
+;			If old luminosity is 255, set output to white
+
+			CMP.W		#255,D7
+			BEQ.S		@1A
+
+;			If new luminosity is zero, set output to gray
+
+			TST.W		D6
+			BNE.S		@2
+@1A 		MOVE.B		D7,-1(A1)
+			MOVE.B		D7,-1(A2)
+			MOVE.B		D7,-1(A3)
+			BRA.S		@8
+
+;			Scale to match old lumonisity
+
+@2			MOVE.W		D6,D5
+			LSR.W		#1,D5
+			MULU.W		D7,D2
+			ADD.W		D5,D2
+			DIVU.W		D6,D2
+			MULU.W		D7,D3
+			ADD.W		D5,D3
+			DIVU.W		D6,D3
+			MULU.W		D7,D4
+			ADD.W		D5,D4
+			DIVU.W		D6,D4
+
+;			Find maximum value
+
+			MOVE.W		D2,D5
+			CMP.W		D3,D5
+			BGE.S		@3
+			MOVE.W		D3,D5
+@3			CMP.W		D4,D5
+			BGE.S		@4
+			MOVE.W		D4,D5
+
+;			If less than or equal to 255, we are done
+
+@4			CMP.W		#255,D5
+			BLE.S		@7
+
+;			Else rescale values
+
+			SUB.W		D7,D5
+			NOT.B		D7
+			MOVE.W		D5,D6
+			LSR.W		#1,D6
+			EXT.L		D6
+			MULU.W		D7,D2
+			ADD.L		D6,D2
+			DIVU.W		D5,D2
+			MULU.W		D7,D3
+			ADD.L		D6,D3
+			DIVU.W		D5,D3
+			MULU.W		D7,D4
+			ADD.L		D6,D4
+			DIVU.W		D5,D4
+
+;			Find new maximum value
+
+			MOVE.W		D2,D5
+			CMP.W		D3,D5
+			BGE.S		@5
+			MOVE.W		D3,D5
+@5			CMP.W		D4,D5
+			BGE.S		@6
+			MOVE.W		D4,D5
+
+;			Add in gray to make maximum 255
+
+@6			NOT.B		D5
+			ADD.B		D5,D2
+			ADD.B		D5,D3
+			ADD.B		D5,D4
+
+;			Save new value
+
+@7			MOVE.B		D2,-1(A1)
+			MOVE.B		D3,-1(A2)
+			MOVE.B		D4,-1(A3)
+
+;			Move to next pixel
+
+@8			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,A2-A4/D3-D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'AClipboard'
+
+DoMaskBinary	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoMaskBinary (maskPtr: Ptr;
+;									dataPtr: Ptr;
+;									count: INTEGER);
+;
+;			Parameter Offsets
+
+@maskPtr	EQU 	14
+@dataPtr	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	10
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Unload addresses
+
+			MOVE.L		@maskPtr(A6),A0
+			MOVE.L		@dataPtr(A6),A1
+
+;			Initial mask
+
+			MOVE.B		#$7F,D1
+
+;			Loop through bytes
+
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+@1			TST.B		(A0)+
+			BMI.S		@2
+
+;			Mask bit in data
+
+			AND.B		D1,(A1)
+
+;			Move to next bit
+
+@2			ROR.B		#1,D1
+			BCS.S		@3
+			ADDA.W		#1,A1
+
+;			Move to next byte
+
+@3			DBF 		D0,@1
+
+;			Clean up and exit
+
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+				SEG 		'ADoFloat'
+
+DoPatternFill	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoPatternFill (srcPtr: Ptr;
+;									 dstPtr: Ptr;
+;									 width: INTEGER;
+;									 count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	16
+@dstPtr 	EQU 	12
+@width		EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	12
+
+;			Save registers
+
+			LINK		A6,#0
+
+;			Initialize loop
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.W		@width(A6),D0
+			MOVE.W		@count(A6),D1
+			SUB.W		#1,D1
+
+;			Move another byte
+
+@1			MOVE.B		(A0)+,(A1)+
+			SUB.W		#1,D0
+			DBEQ		D1,@1
+
+			BNE.S		@3
+
+@2			MOVE.L		@srcPtr(A6),A0
+			MOVE.W		@width(A6),D0
+			DBF 		D1,@1
+
+;			Clean up and exit
+
+@3			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoFloat'
+
+DoLinearGradient	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoLinearGradient (dstPtr: Ptr;
+;										count: INTEGER;
+;										base: LONGINT;
+;										step: LONGINT;
+;										dist: LONGINT;
+;										table: Ptr);
+;
+;			Parameter Offsets
+
+@dstPtr 	EQU 	26
+@count		EQU 	24
+@base		EQU 	20
+@step		EQU 	16
+@dist		EQU 	12
+@table		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	22
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D7,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@dstPtr(A6),A0
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+			MOVE.L		@base(A6),D1
+			MOVE.L		@step(A6),D2
+			MOVE.L		@dist(A6),D3
+			MOVE.L		@table(A6),A1
+
+;			Find scale factor
+
+			CLR.W		D4
+			MOVE.L		D3,D5
+@A			CMP.L		#$10000,D5
+			BLT.S		@B
+			ADD.W		#1,D4
+			LSR.L		#1,D5
+			BRA.S		@A
+@B			MOVE.L		D5,D6
+			LSR.L		#1,D6
+
+;			If D1 <= 0, set result to first value
+
+@1			TST.L		D1
+			BGT.S		@2
+			MOVE.B		(A1),(A0)+
+			BRA.S		@next
+
+;			If D1 >= dist, set result to last value
+
+@2			CMP.L		D3,D1
+			BLT.S		@3
+			MOVE.B		4095(A1),(A0)+
+			BRA.S		@next
+
+;			Somewhere in between
+
+@3			MOVE.L		D1,D7
+			LSR.L		D4,D7
+			MULU.W		#4095,D7
+			ADD.L		D6,D7
+			DIVU.W		D5,D7
+			MOVE.B		(A1,D7.W),(A0)+
+
+;			Move to next pixel
+
+@next		ADD.L		D2,D1
+			DBF 		D0,@1
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+					SEG 		'ADoFloat'
+
+DoRadialGradient	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE DoRadialGradient (dstPtr: Ptr;
+;										count: INTEGER;
+;										deltaRow: INTEGER;
+;										deltaCol: INTEGER;
+;										dist: LONGINT;
+;										table: Ptr);
+;
+;			Parameter Offsets
+
+@dstPtr 	EQU 	22
+@count		EQU 	20
+@deltaRow	EQU 	18
+@deltaCol	EQU 	16
+@dist		EQU 	12
+@table		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	18
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVEM.L 	D3-D7,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@dstPtr(A6),A0
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+			MOVE.W		@deltaRow(A6),D1
+			MOVE.W		@deltaCol(A6),D2
+			MOVE.L		@dist(A6),D3
+			MOVE.L		@table(A6),A1
+
+;			Square row displacement
+
+			MULS.W		D1,D1
+
+;			Find scale factor
+
+			CLR.W		D4
+@1			CMP.L		#$10000,D3
+			BLT.S		@2
+			ADD.W		#1,D4
+			LSR.L		#1,D3
+			BRA.S		@1
+
+;			Compute this radius squared
+
+@2			MOVE.W		D2,D7
+			MULS.W		D7,D7
+			ADD.L		D1,D7
+			LSR.L		D4,D7
+
+;			If radius squared >= dist, set result to last value
+
+			CMP.L		D3,D7
+			BLT.S		@3
+			MOVE.B		4095(A1),(A0)+
+			BRA.S		@next
+
+;			Somewhere inside, find square of radius
+
+@3			MULU.W		#4095,D7
+			MOVE.L		D7,D6
+			SWAP		D6
+			MULU.W		#4095,D6
+			MULU.W		#4095,D7
+			SWAP		D7
+			CLR.L		D5
+			MOVE.W		D7,D5
+			ADD.L		D5,D6
+			CLR.W		D7
+			SWAP		D7
+			DIVU.W		D3,D6
+			MOVE.W		D6,D5
+			CLR.W		D6
+			ADD.L		D6,D7
+			DIVU.W		D3,D7
+			SWAP		D7
+			CLR.W		D7
+			SWAP		D7
+			SWAP		D5
+			ADD.L		D5,D7
+
+;			Find integer square root
+
+			SWAP		D4
+			MOVE.W		#$800,D4
+			CLR.W		D5
+@4			ADD.W		D4,D5
+			MOVE.W		D5,D6
+			MULU.W		D5,D6
+			CMP.L		D6,D7
+			BHS.S		@5
+			SUB.W		D4,D5
+@5			LSR.W		#1,D4
+			BCC.S		@4
+			SWAP		D4
+
+;			Map through rate table
+
+			MOVE.B		(A1,D5.W),(A0)+
+
+;			Move to next pixel
+
+@next		ADD.W		#1,D2
+			DBF 		D0,@2
+
+;			Clean up and exit
+
+			MOVEM.L 	(SP)+,D3-D7
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			END

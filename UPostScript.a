@@ -1,0 +1,167 @@
+;Photoshop version 1.0.1, file: UPostScript.a
+;  Computer History Museum, www.computerhistory.org
+;  This material is (C)Copyright 1990 Adobe Systems Inc.
+;  It may not be distributed to third parties.
+;  It is licensed for non-commercial use according to 
+;  www.computerhistory.org/softwarelicense/photoshop/ 
+
+			INCLUDE 	'Traps.a'
+
+			STRING		ASIS
+
+; **********************************************************************
+
+				SEG 		'APostScript'
+
+ConvertToHex	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			PROCEDURE ConvertToHex (srcPtr: Ptr;
+;									dstPtr: Ptr;
+;									count: INTEGER);
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	14
+@dstPtr 	EQU 	10
+@count		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	10
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVE.L		A2,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@dstPtr(A6),A1
+			MOVE.W		@count(A6),D0
+			SUB.W		#1,D0
+
+;			Load address of conversion table
+
+			LEA 		@table,A2
+
+;			Convert to hex
+
+			CLR.W		D1
+@1			MOVE.B		(A0),D1
+			LSR.B		#4,D1
+			MOVE.B		(A2,D1.W),(A1)+
+			MOVE.B		(A0)+,D1
+			AND.B		#15,D1
+			MOVE.B		(A2,D1.W),(A1)+
+			DBF 		D0,@1
+
+;			Add a newline at end
+
+			MOVE.B		#13,(A1)
+
+;			Clean up and exit
+
+			MOVE.L		(SP)+,A2
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+;			Conversion table
+
+@table		DC.B		'0123456789ABCDEF'
+
+; **********************************************************************
+
+			SEG 		'AEPSFormat'
+
+DeHexBytes	PROC		EXPORT
+
+;			Calling sequence (Pascal conventions):
+;
+;			FUNCTION DeHexBytes (srcPtr: Ptr;
+;								 VAR srcCount: LONGINT;
+;								 VAR dstPtr: Ptr;
+;								 VAR dstCount: LONGINT;
+;								 table: TLookUpTable): LONGINT;
+;
+;			Parameter Offsets
+
+@srcPtr 	EQU 	24
+@srcCount	EQU 	20
+@dstPtr 	EQU 	16
+@dstCount	EQU 	12
+@table		EQU 	8
+
+;			Size of parameters
+
+@params 	EQU 	20
+
+;			Save registers
+
+			LINK		A6,#0
+			MOVE.L		A2,-(SP)
+
+;			Unload parameters
+
+			MOVE.L		@srcPtr(A6),A0
+			MOVE.L		@srcCount(A6),A2
+			MOVE.L		(A2),D0
+			MOVE.L		@dstPtr(A6),A2
+			MOVE.L		(A2),A1
+			MOVE.L		@dstCount(A6),A2
+			MOVE.L		(A2),D1
+			MOVE.L		@table(A6),A2
+
+;			Get another input nybble
+
+			CLR.W		D2
+@1			SUB.L		#1,D0
+			BMI.S		@3
+			MOVE.B		(A0)+,D2
+			MOVE.B		(A2,D2.W),D2
+			BMI.S		@1
+
+;			If count is even, write high nybble
+
+			BTST		#0,D1
+			BNE.S		@2
+			LSL.B		#4,D2
+			MOVE.B		D2,(A1)
+			SUB.L		#1,D1
+			BRA.S		@1
+
+;			If count is odd, write low nybble
+
+@2			ADD.B		D2,(A1)+
+			SUB.L		#1,D1
+			BNE.S		@1
+			SUB.L		#1,D0
+
+;			Fix up srcCount
+
+@3			ADD.L		#1,D0
+
+;			Return VAR values
+
+			MOVE.L		@srcCount(A6),A2
+			MOVE.L		D0,(A2)
+			MOVE.L		@dstPtr(A6),A2
+			MOVE.L		A1,(A2)
+			MOVE.L		@dstCount(A6),A2
+			MOVE.L		D1,(A2)
+
+;			Clean up and exit
+
+			MOVE.L		(SP)+,A2
+			UNLK		A6
+			MOVE.L		(SP)+,A0
+			ADD.W		#@params,SP
+			JMP 		(A0)
+
+; **********************************************************************
+
+			END
