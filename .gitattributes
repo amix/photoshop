@@ -1,2 +1,2 @@
-*.p linguist-language="Pascal"
-*.inc linguist-language="Pascal"
+*.p linguist-language=Pascal
+*.inc linguist-language=Pascal
